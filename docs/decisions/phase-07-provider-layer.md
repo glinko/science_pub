@@ -1,11 +1,22 @@
 # Phase 07 Decision
 
-## LLM Providers
+## LLM providers
 
-- `mock` обязателен и fully working
-- `litellm` обязателен как readiness integration
+- `mock` обязателен и остается fully working baseline для milestone 1.
+- `litellm` больше не является только readiness-заглушкой: в Phase GPU-3 он стал рабочим integration layer между backend и GPU-нодой `192.168.88.20`.
 
-## Почему registry
+## Почему LiteLLM оставлен отдельным слоем
 
-Registry упрощает переключение между mock/local/paid providers в следующих фазах.
+- Backend не знает о конкретной модели на GPU-ноде и работает только с alias'ами LiteLLM.
+- Это позволяет менять upstream без правок в бизнес-коде.
+- Для текущей фазы достаточно одного рабочего `qwen3.6` upstream для alias'ов `gpu/fast-small` и `gpu/deep-analysis`, пока мы валидируем сетевую и operational интеграцию.
 
+## Зафиксированное поведение
+
+- Liveness LiteLLM проверяется через `GET /health/liveliness`.
+- Реальный completion проверяется запросом к `POST /v1/chat/completions` с `Authorization: Bearer science-pub-local-only`.
+- Проверка `2026-06-13` на `scidocker` подтвердила успешный ответ `200` от LiteLLM и completion с текстом `GPU_OK` через alias `gpu/fast-small`.
+
+## Почему registry остается
+
+Registry по-прежнему упрощает переключение между `mock`, локальными alias'ами LiteLLM и будущими paid/local providers в следующих фазах.
