@@ -81,6 +81,11 @@ def test_parse_scoring_response_rejects_out_of_range_values() -> None:
         )
 
 
+def test_parse_scoring_response_rejects_malformed_json() -> None:
+    with pytest.raises(ValueError, match="Invalid scoring response"):
+        parse_scoring_response("not-json")
+
+
 @pytest.mark.asyncio
 async def test_score_paper_uses_provider_and_model_to_return_breakdown() -> None:
     captured: dict[str, str] = {}

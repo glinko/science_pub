@@ -69,25 +69,17 @@ class ScoringService:
         papers = await self.paper_repository.fetch_for_scoring(session, limit=limit, status=status)
         processed = 0
         for paper in papers:
-            if provider == "mock":
-                breakdown = self.mock_scorer.score_paper(paper)
-                model_used = "mock:heuristic-v1"
-            elif provider == "litellm":
-                llm_provider = self.provider_registry.get_llm_provider("litellm")
-                scorer = LiteLLMPaperScorer(llm_provider, self.settings.litellm_scoring_model)
-                try:
-                    breakdown = await scorer.score_paper(paper)
-                except ProviderNotReadyError:
-                    raise
-                model_used = self.settings.litellm_scoring_model
-            else:
-                llm_provider = self.provider_registry.get_llm_provider(provider)
-                try:
-                    await llm_provider.generate(f"Score paper: {paper.title}")
-                except ProviderNotReadyError:
-                    raise
-                breakdown = self.mock_scorer.score_paper(paper)
-                model_used = f"{provider}:deferred"
+            try:
+                breakdown, model_used = await self._score_single_paper(paper, provider)
+            except ValueError:
+                if provider == "litellm":
+                    paper.status = PaperStatus.FAILED
+                    await session.commit()
+                    continue
+                raise
+            except ProviderNotReadyError:
+                await session.commit()
+                raise
 
             final_score = compute_final_score(breakdown)
             session.add(
@@ -105,6 +97,24 @@ class ScoringService:
                 )
             )
             paper.status = PaperStatus.SCORED
+            await session.commit()
             processed += 1
-        await session.commit()
         return processed
+
+    async def _score_single_paper(
+        self,
+        paper: Paper,
+        provider: str,
+    ) -> tuple[ScoreBreakdown, str]:
+        if provider == "mock":
+            return self.mock_scorer.score_paper(paper), "mock:heuristic-v1"
+
+        if provider == "litellm":
+            llm_provider = self.provider_registry.get_llm_provider("litellm")
+            scorer = LiteLLMPaperScorer(llm_provider, self.settings.litellm_scoring_model)
+            breakdown = await scorer.score_paper(paper)
+            return breakdown, self.settings.litellm_scoring_model
+
+        llm_provider = self.provider_registry.get_llm_provider(provider)
+        await llm_provider.generate(f"Score paper: {paper.title}")
+        return self.mock_scorer.score_paper(paper), f"{provider}:deferred"
