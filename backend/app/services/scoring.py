@@ -11,6 +11,7 @@ from app.providers.litellm_provider import ProviderNotReadyError
 from app.providers.registry import ProviderRegistry
 from app.schemas.scoring import ScoreBreakdown
 
+from .llm_scoring import LiteLLMPaperScorer
 from .papers import PaperRepository
 
 
@@ -71,6 +72,14 @@ class ScoringService:
             if provider == "mock":
                 breakdown = self.mock_scorer.score_paper(paper)
                 model_used = "mock:heuristic-v1"
+            elif provider == "litellm":
+                llm_provider = self.provider_registry.get_llm_provider("litellm")
+                scorer = LiteLLMPaperScorer(llm_provider, self.settings.litellm_scoring_model)
+                try:
+                    breakdown = await scorer.score_paper(paper)
+                except ProviderNotReadyError:
+                    raise
+                model_used = self.settings.litellm_scoring_model
             else:
                 llm_provider = self.provider_registry.get_llm_provider(provider)
                 try:
@@ -99,4 +108,3 @@ class ScoringService:
             processed += 1
         await session.commit()
         return processed
-
