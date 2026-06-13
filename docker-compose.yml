@@ -1,0 +1,195 @@
+services:
+  postgres:
+    image: postgres:16.8-alpine
+    container_name: science-pub-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT}:5432"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [science-pub]
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: science-pub-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:${REDIS_PORT}:6379"
+    volumes:
+      - ./data/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [science-pub]
+
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-07-23T15-54-02Z
+    container_name: science-pub-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${SCIENCE_PUB_MINIO_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${SCIENCE_PUB_MINIO_SECRET_KEY}
+    ports:
+      - "127.0.0.1:${MINIO_API_PORT}:9000"
+      - "${MINIO_CONSOLE_PORT}:9001"
+    volumes:
+      - ./data/minio:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9000/minio/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    networks: [science-pub]
+
+  qdrant:
+    image: qdrant/qdrant:v1.15.0
+    container_name: science-pub-qdrant
+    restart: unless-stopped
+    ports:
+      - "${QDRANT_PORT}:6333"
+    volumes:
+      - ./data/qdrant:/qdrant/storage
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bash",
+          "-lc",
+          "exec 3<>/dev/tcp/127.0.0.1/6333 && printf 'GET /healthz HTTP/1.1\\r\\nHost: 127.0.0.1\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '200 OK' <&3",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    networks: [science-pub]
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-stable
+    container_name: science-pub-litellm
+    restart: unless-stopped
+    command: ["--config", "/app/config.yaml", "--host", "0.0.0.0", "--port", "4000"]
+    ports:
+      - "${LITELLM_PORT}:4000"
+    volumes:
+      - ./infra/litellm/config.yaml:/app/config.yaml:ro
+      - ./data/litellm:/app/logs
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness').read()",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    networks: [science-pub]
+
+  backend:
+    build:
+      context: ./backend
+    container_name: science-pub-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      SCIENCE_PUB_DATABASE_URL: ${SCIENCE_PUB_DATABASE_URL}
+      SCIENCE_PUB_REDIS_URL: ${SCIENCE_PUB_REDIS_URL}
+      SCIENCE_PUB_MINIO_ENDPOINT: ${SCIENCE_PUB_MINIO_ENDPOINT}
+      SCIENCE_PUB_MINIO_ACCESS_KEY: ${SCIENCE_PUB_MINIO_ACCESS_KEY}
+      SCIENCE_PUB_MINIO_SECRET_KEY: ${SCIENCE_PUB_MINIO_SECRET_KEY}
+      SCIENCE_PUB_MINIO_SECURE: ${SCIENCE_PUB_MINIO_SECURE}
+      SCIENCE_PUB_QDRANT_URL: ${SCIENCE_PUB_QDRANT_URL}
+      SCIENCE_PUB_LITELLM_URL: ${SCIENCE_PUB_LITELLM_URL}
+      SCIENCE_PUB_LITELLM_MODEL: ${SCIENCE_PUB_LITELLM_MODEL}
+      SCIENCE_PUB_N8N_URL: ${SCIENCE_PUB_N8N_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      litellm:
+        condition: service_healthy
+    ports:
+      - "${BACKEND_PORT}:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    networks: [science-pub]
+
+  worker:
+    build:
+      context: ./backend
+    container_name: science-pub-worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      SCIENCE_PUB_DATABASE_URL: ${SCIENCE_PUB_DATABASE_URL}
+      SCIENCE_PUB_REDIS_URL: ${SCIENCE_PUB_REDIS_URL}
+      SCIENCE_PUB_MINIO_ENDPOINT: ${SCIENCE_PUB_MINIO_ENDPOINT}
+      SCIENCE_PUB_MINIO_ACCESS_KEY: ${SCIENCE_PUB_MINIO_ACCESS_KEY}
+      SCIENCE_PUB_MINIO_SECRET_KEY: ${SCIENCE_PUB_MINIO_SECRET_KEY}
+      SCIENCE_PUB_MINIO_SECURE: ${SCIENCE_PUB_MINIO_SECURE}
+      SCIENCE_PUB_QDRANT_URL: ${SCIENCE_PUB_QDRANT_URL}
+      SCIENCE_PUB_LITELLM_URL: ${SCIENCE_PUB_LITELLM_URL}
+      SCIENCE_PUB_LITELLM_MODEL: ${SCIENCE_PUB_LITELLM_MODEL}
+      SCIENCE_PUB_N8N_URL: ${SCIENCE_PUB_N8N_URL}
+    command: ["python", "-m", "app.workers.runner"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -m app.workers.healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    networks: [science-pub]
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:1.108.2
+    container_name: science-pub-n8n
+    restart: unless-stopped
+    environment:
+      N8N_BASIC_AUTH_ACTIVE: "true"
+      N8N_BASIC_AUTH_USER: ${N8N_BASIC_AUTH_USER}
+      N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD}
+      N8N_HOST: sci_docker
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      N8N_RUNNERS_ENABLED: "true"
+    ports:
+      - "${N8N_PORT}:5678"
+    volumes:
+      - ./data/n8n:/home/node/.n8n
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:5678/healthz >/dev/null"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+    networks: [science-pub]
+
+networks:
+  science-pub:
+    name: science-pub

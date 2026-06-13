@@ -1,0 +1,42 @@
+[project]
+name = "science-pub-backend"
+version = "0.1.0"
+description = "Science Pub backend"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "alembic>=1.16.2",
+  "asyncpg>=0.31.0",
+  "fastapi>=0.116.1",
+  "httpx>=0.28.1",
+  "minio>=7.2.18",
+  "pydantic-settings>=2.10.1",
+  "python-dateutil>=2.9.0.post0",
+  "redis>=6.2.0",
+  "rq>=2.4.1",
+  "sqlalchemy>=2.0.41",
+  "uvicorn[standard]>=0.35.0",
+]
+
+[dependency-groups]
+dev = [
+  "aiosqlite>=0.21.0",
+  "fakeredis>=2.31.0",
+  "pytest>=8.4.1",
+  "pytest-asyncio>=1.0.0",
+  "pytest-cov>=6.2.1",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

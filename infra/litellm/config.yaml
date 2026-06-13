@@ -1,0 +1,11 @@
+model_list:
+  - model_name: local/qwen
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_base: http://127.0.0.1:65535/v1
+      api_key: "not-configured"
+
+general_settings:
+  master_key: science-pub-local-only
+  completion_model: local/qwen
+
