@@ -28,6 +28,13 @@ class AppSettings(BaseSettings):
     qdrant_url: str
     litellm_url: str
     litellm_model: str | None = None
+    gpu_node_host: str = "192.168.88.20"
+    gpu_llm_fast_url: str = "http://192.168.88.20:9000/v1"
+    gpu_llm_deep_url: str = "http://192.168.88.20:9000/v1"
+    gpu_embeddings_url: str = "http://192.168.88.20:9001/v1"
+    gpu_tts_url: str = "http://127.0.0.1:5005"
+    gpu_comfyui_url: str = "http://127.0.0.1:8188"
+    gpu_render_url: str = "http://127.0.0.1:3000"
     n8n_url: str = "http://n8n:5678"
     api_host: str = "0.0.0.0"
     api_port: int = 8000
@@ -51,6 +58,7 @@ class AppSettings(BaseSettings):
     score_threshold: float = 7.0
     provider_default: str = "mock"
     health_warning_litellm: str = "litellm_upstream_inference_not_configured"
+    health_warning_gpu_partial: str = "gpu_integrations_declared_but_not_wired"
 
 
 @lru_cache(maxsize=1)
