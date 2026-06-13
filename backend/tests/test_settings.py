@@ -49,4 +49,6 @@ def test_settings_expose_litellm_scoring_defaults() -> None:
 
     assert settings.litellm_api_key is None
     assert settings.litellm_scoring_model == "gpu/deep-analysis"
+    assert settings.litellm_timeout_seconds == 30.0
+    assert settings.request_timeout_seconds == 10.0
     assert settings.provider_default == "mock"

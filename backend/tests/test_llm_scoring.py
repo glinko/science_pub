@@ -86,6 +86,27 @@ def test_parse_scoring_response_rejects_malformed_json() -> None:
         parse_scoring_response("not-json")
 
 
+def test_parse_scoring_response_accepts_fenced_json() -> None:
+    result = parse_scoring_response(
+        """
+        ```json
+        {
+          "public_interest": 8.2,
+          "visual_potential": 7.4,
+          "novelty": 8.8,
+          "practical_relevance": 6.9,
+          "mystery": 6.1,
+          "credibility": 8.7,
+          "explanation": "The model returned fenced JSON, but the payload is still valid."
+        }
+        ```
+        """
+    )
+
+    assert result.public_interest == 8.2
+    assert result.credibility == 8.7
+
+
 @pytest.mark.asyncio
 async def test_score_paper_uses_provider_and_model_to_return_breakdown() -> None:
     captured: dict[str, str] = {}

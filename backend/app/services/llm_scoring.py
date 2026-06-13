@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 from pydantic import ValidationError
 
@@ -36,7 +37,7 @@ def build_scoring_prompt(paper: Paper) -> str:
 
 def parse_scoring_response(raw_text: str) -> ScoreBreakdown:
     try:
-        payload = json.loads(raw_text)
+        payload = json.loads(_extract_json_payload(raw_text))
         return ScoreBreakdown.model_validate(payload)
     except (json.JSONDecodeError, ValidationError) as exc:
         raise ValueError(f"Invalid scoring response: {exc}") from exc
@@ -51,3 +52,19 @@ class LiteLLMPaperScorer:
         prompt = build_scoring_prompt(paper)
         raw_text = await self.provider.generate(prompt, self.model)
         return parse_scoring_response(raw_text)
+
+
+def _extract_json_payload(raw_text: str) -> str:
+    stripped = raw_text.strip()
+    if stripped.startswith("{") and stripped.endswith("}"):
+        return stripped
+
+    fenced_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", stripped, flags=re.DOTALL | re.IGNORECASE)
+    if fenced_match:
+        return fenced_match.group(1)
+
+    object_match = re.search(r"(\{.*\})", stripped, flags=re.DOTALL)
+    if object_match:
+        return object_match.group(1)
+
+    return stripped
