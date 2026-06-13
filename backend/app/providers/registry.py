@@ -14,6 +14,7 @@ class ProviderRegistry:
                 base_url=settings.litellm_url,
                 timeout=settings.request_timeout_seconds,
                 default_model=settings.litellm_model,
+                api_key=settings.litellm_api_key,
             ),
         }
 
@@ -22,4 +23,3 @@ class ProviderRegistry:
             return self._llm_providers[provider_name]
         except KeyError as exc:
             raise KeyError(f"Unknown provider: {provider_name}") from exc
-

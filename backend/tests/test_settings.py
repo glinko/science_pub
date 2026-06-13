@@ -34,3 +34,19 @@ def test_settings_expose_gpu_integration_defaults() -> None:
     assert str(settings.gpu_embeddings_url) == "http://192.168.88.20:9001/v1"
     assert str(settings.gpu_tts_url) == "http://127.0.0.1:5005"
     assert settings.health_warning_gpu_partial == "gpu_integrations_declared_but_not_wired"
+
+
+def test_settings_expose_litellm_scoring_defaults() -> None:
+    settings = AppSettings(
+        database_url="sqlite+aiosqlite:///science.db",
+        redis_url="redis://localhost:6379/0",
+        minio_endpoint="localhost:9000",
+        minio_access_key="key",
+        minio_secret_key="secret",
+        qdrant_url="http://localhost:6333",
+        litellm_url="http://localhost:4000",
+    )
+
+    assert settings.litellm_api_key is None
+    assert settings.litellm_scoring_model == "gpu/deep-analysis"
+    assert settings.provider_default == "mock"

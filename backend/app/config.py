@@ -27,7 +27,9 @@ class AppSettings(BaseSettings):
     minio_secure: bool = False
     qdrant_url: str
     litellm_url: str
+    litellm_api_key: str | None = None
     litellm_model: str | None = None
+    litellm_scoring_model: str = "gpu/deep-analysis"
     gpu_node_host: str = "192.168.88.20"
     gpu_llm_fast_url: str = "http://192.168.88.20:9000/v1"
     gpu_llm_deep_url: str = "http://192.168.88.20:9000/v1"

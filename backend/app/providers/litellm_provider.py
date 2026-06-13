@@ -8,10 +8,23 @@ class ProviderNotReadyError(RuntimeError):
 
 
 class LiteLLMProvider:
-    def __init__(self, base_url: str, timeout: float, default_model: str | None) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        timeout: float,
+        default_model: str | None,
+        api_key: str | None = None,
+    ) -> None:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self.default_model = default_model
+        self.api_key = api_key
+
+    def _build_headers(self) -> dict[str, str]:
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        return headers
 
     async def generate(self, prompt: str, model: str | None = None) -> str:
         model_name = model or self.default_model
@@ -26,6 +39,7 @@ class LiteLLMProvider:
                         "model": model_name,
                         "messages": [{"role": "user", "content": prompt}],
                     },
+                    headers=self._build_headers(),
                 )
                 response.raise_for_status()
         except httpx.HTTPError as exc:
