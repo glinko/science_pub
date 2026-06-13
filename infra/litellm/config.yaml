@@ -1,11 +1,20 @@
 model_list:
-  - model_name: local/qwen
+  - model_name: gpu/fast-small
     litellm_params:
-      model: openai/gpt-4o-mini
-      api_base: http://127.0.0.1:65535/v1
-      api_key: "not-configured"
+      model: openai/qwen3.6
+      api_base: http://192.168.88.20:9000/v1
+      api_key: local-gpu-node
+  - model_name: gpu/deep-analysis
+    litellm_params:
+      model: openai/qwen3.6
+      api_base: http://192.168.88.20:9000/v1
+      api_key: local-gpu-node
+  - model_name: gpu/embeddings
+    litellm_params:
+      model: openai/bge-m3
+      api_base: http://192.168.88.20:9001/v1
+      api_key: local-gpu-node
 
 general_settings:
   master_key: science-pub-local-only
-  completion_model: local/qwen
-
+  completion_model: gpu/fast-small
