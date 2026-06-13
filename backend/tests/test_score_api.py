@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 from httpx import AsyncClient
 
+from app.config import AppSettings
 from app.dependencies import get_scoring_service
 from app.providers.litellm_provider import ProviderNotReadyError
 
@@ -34,6 +35,7 @@ def isolated_scoring_service(app_client: AsyncClient):
 async def test_score_papers_accepts_litellm_and_returns_provider(
     app_client: AsyncClient,
     isolated_scoring_service,
+    settings: AppSettings,
 ) -> None:
     response = await app_client.post(
         "/score/papers",
@@ -44,7 +46,7 @@ async def test_score_papers_accepts_litellm_and_returns_provider(
     payload = response.json()
     assert payload["processed"] == 4
     assert payload["provider"] == "litellm"
-    assert payload["threshold"] > 0
+    assert payload["threshold"] == settings.score_threshold
     assert isolated_scoring_service.calls == [
         {
             "session_type": "AsyncSession",
