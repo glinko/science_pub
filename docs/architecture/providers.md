@@ -3,7 +3,7 @@
 ## LLM
 
 - `MockLLMProvider` остается значением по умолчанию для scoring в milestone 1 и для Phase 09 все еще используется как `provider_default=mock`.
-- `LiteLLMProvider` работает как production-ready HTTP-клиент к контейнеру `litellm` на основном узле `192.168.88.150`.
+- `LiteLLMProvider` в этой фазе реализует HTTP plumbing к контейнеру `litellm` на основном узле `192.168.88.150` и участвует в readiness-пути.
 - Контейнер `litellm` маршрутизирует запросы к GPU-ноде `192.168.88.20`, а бизнес-код backend не ходит к GPU endpoint'ам напрямую.
 
 ## LiteLLM aliases
@@ -13,6 +13,8 @@
 - `gpu/embeddings` -> `bge-m3` через `http://192.168.88.20:9001/v1`
 
 Текущая фаза валидирует интеграционный слой, поэтому `gpu/fast-small` и `gpu/deep-analysis` сознательно используют один и тот же upstream.
+
+Важно: верификация `2026-06-13` подтвердила живой LiteLLM routing и прямой completion через LiteLLM с `Authorization` header. Отдельная auth-verified проверка backend-driven inference через `LiteLLMProvider` в эту фазу не входила.
 
 ## Readiness
 

@@ -18,7 +18,9 @@ python scripts/test_stack.py
 
 ## GPU-3 routing
 
-- `backend` и `worker` получают `SCIENCE_PUB_GPU_*` и `GPU_*` переменные через `.env`.
+- Оператор задает `GPU_*` значения в `.env`.
+- `docker-compose.yml` маппит их в `SCIENCE_PUB_GPU_*` переменные контейнеров `backend` и `worker`.
+- `AppSettings` внутри приложения читает именно `SCIENCE_PUB_*` переменные, потому что использует `env_prefix="SCIENCE_PUB_"`.
 - `litellm` остается отдельным контейнером основного стека и монтирует `./infra/litellm/config.yaml`.
 - LiteLLM проксирует:
   - `gpu/fast-small` -> `192.168.88.20:9000/v1`

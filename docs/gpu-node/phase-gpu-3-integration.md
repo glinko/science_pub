@@ -80,7 +80,8 @@ PY
 - `GET /health/liveliness` вернул `"I'm alive!"`.
 - `GET /health` вернул `status=ok`; все сервисы `database`, `redis`, `minio`, `qdrant`, `litellm`, `gpu_llm_fast`, `gpu_llm_deep`, `gpu_embeddings` вернули `ok=true`.
 - `GET /config-check` вернул `valid=true`, `litellm_model=gpu/fast-small`, `gpu_node_host=192.168.88.20`.
-- Реальный completion через `gpu/fast-small` вернул HTTP `200` и `choices[0].message.content="GPU_OK"`.
+- Реальный completion через `gpu/fast-small` вернул HTTP `200` и `choices[0].message.content="GPU_OK"` при прямом обращении к LiteLLM с `Authorization: Bearer science-pub-local-only`.
+- Эта проверка подтверждает LiteLLM-direct inference и alias routing, но не подтверждает отдельно backend-driven secured inference через текущую реализацию `LiteLLMProvider`.
 
 ### На GPU-ноде
 
@@ -103,4 +104,5 @@ curl -fsS http://127.0.0.1:9001/v1/models
 ## Операционные замечания
 
 - LiteLLM `master_key` обязателен для реальных `v1/chat/completions` запросов; без `Authorization: Bearer science-pub-local-only` сервис возвращал `401 Unauthorized`.
+- Внутри compose оператор задает `GPU_*` переменные в `.env`, а `backend` и `worker` получают уже `SCIENCE_PUB_GPU_*` значения через явный mapping в `docker-compose.yml`.
 - После замены `infra/litellm/config.yaml` на `scidocker` потребовался `docker compose up -d --force-recreate litellm`, иначе контейнер продолжал обслуживать старый alias `local/qwen`.
