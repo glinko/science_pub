@@ -14,9 +14,30 @@ class LiteLLMProvider:
         self.default_model = default_model
 
     async def generate(self, prompt: str, model: str | None = None) -> str:
-        if not (model or self.default_model):
+        model_name = model or self.default_model
+        if not model_name:
             raise ProviderNotReadyError("LiteLLM model is not configured yet.")
-        raise ProviderNotReadyError("LiteLLM inference wiring is deferred to Phase 9.")
+
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(
+                    f"{self.base_url}/chat/completions",
+                    json={
+                        "model": model_name,
+                        "messages": [{"role": "user", "content": prompt}],
+                    },
+                )
+                response.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise ProviderNotReadyError(f"LiteLLM request failed: {exc}") from exc
+
+        try:
+            data = response.json()
+            return data["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError, ValueError) as exc:
+            raise ProviderNotReadyError(
+                "LiteLLM returned an unexpected response payload."
+            ) from exc
 
     async def healthcheck(self) -> tuple[bool, str]:
         try:
@@ -26,4 +47,3 @@ class LiteLLMProvider:
             return True, "ok"
         except Exception as exc:  # pragma: no cover - exercised in integration
             return False, str(exc)
-
