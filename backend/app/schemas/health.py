@@ -20,8 +20,14 @@ class VersionResponse(BaseModel):
     build: str | None = None
 
 
+class ConfigCheckItem(BaseModel):
+    ok: bool
+    required: bool
+    detail: str
+
+
 class ConfigCheckResponse(BaseModel):
     valid: bool
     warnings: list[str]
+    checks: dict[str, ConfigCheckItem]
     config: dict[str, str | bool | int | None]
-

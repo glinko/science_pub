@@ -7,7 +7,16 @@ async def test_health_endpoint_returns_service_statuses(app_client: AsyncClient)
     assert response.status_code == 200
     payload = response.json()
     assert payload["status"] in {"ok", "degraded"}
-    assert set(payload["services"]) == {"database", "redis", "minio", "qdrant", "litellm"}
+    assert set(payload["services"]) == {
+        "database",
+        "redis",
+        "minio",
+        "qdrant",
+        "litellm",
+        "gpu_llm_fast",
+        "gpu_llm_deep",
+        "gpu_embeddings",
+    }
 
 
 async def test_config_check_reports_warning_for_unwired_litellm(app_client: AsyncClient) -> None:
@@ -15,8 +24,14 @@ async def test_config_check_reports_warning_for_unwired_litellm(app_client: Asyn
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["valid"] is True
     assert "litellm_upstream_inference_not_configured" in payload["warnings"]
+    assert "gpu_integrations_declared_but_not_wired" in payload["warnings"]
+    assert set(payload["checks"]) == {
+        "litellm",
+        "gpu_llm_fast",
+        "gpu_llm_deep",
+        "gpu_embeddings",
+    }
 
 
 async def test_collect_endpoint_persists_papers(app_client: AsyncClient) -> None:
@@ -30,4 +45,3 @@ async def test_collect_endpoint_persists_papers(app_client: AsyncClient) -> None
     assert payload["inserted"] >= 0
     papers_response = await app_client.get("/papers")
     assert papers_response.status_code == 200
-

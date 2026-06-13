@@ -25,15 +25,23 @@ async def version(settings: AppSettings = Depends(get_settings_dependency)) -> V
 
 
 @router.get("/config-check", response_model=ConfigCheckResponse)
-async def config_check(settings: AppSettings = Depends(get_settings_dependency)) -> ConfigCheckResponse:
+async def config_check(
+    settings: AppSettings = Depends(get_settings_dependency),
+    health_service: HealthService = Depends(get_health_service),
+) -> ConfigCheckResponse:
+    checks = await health_service.config_checks()
     return ConfigCheckResponse(
-        valid=True,
-        warnings=[settings.health_warning_litellm],
+        valid=all(item.ok or not item.required for item in checks.values()),
+        warnings=[
+            settings.health_warning_litellm,
+            settings.health_warning_gpu_partial,
+        ],
+        checks=checks,
         config={
             "environment": settings.environment,
+            "gpu_node_host": settings.gpu_node_host,
             "minio_secure": settings.minio_secure,
             "api_port": settings.api_port,
             "litellm_model": settings.litellm_model,
         },
     )
-
