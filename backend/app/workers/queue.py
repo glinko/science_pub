@@ -32,11 +32,12 @@ class RQJobDispatcher(JobDispatcher):
         self.queue = Queue("science-pub", connection=self.redis)
 
     async def enqueue(self, job_type: str, job_id: UUID, payload: dict) -> None:
-        from .tasks import run_collect_arxiv_job, run_score_papers_job
+        from .tasks import run_analyze_script_job, run_collect_arxiv_job, run_score_papers_job
 
         handlers = {
             "collect-arxiv": run_collect_arxiv_job,
             "score-papers": run_score_papers_job,
+            "analyze-script-papers": run_analyze_script_job,
         }
         self.queue.enqueue(handlers[job_type], str(job_id), payload, job_id=str(job_id))
 
@@ -45,4 +46,3 @@ def build_dispatcher(settings: AppSettings) -> JobDispatcher:
     if settings.testing:
         return InlineJobDispatcher()
     return RQJobDispatcher(settings.redis_url)
-

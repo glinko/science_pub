@@ -8,9 +8,9 @@
 
 - provisioning выделенной VM `sci_docker` в Proxmox;
 - Docker Compose стек с `postgres`, `redis`, `minio`, `qdrant`, `backend`, `worker`, `n8n`, `litellm`, `dashboard`;
-- FastAPI backend с `health`, `version`, `config-check`, arXiv collector, papers API, scoring API и job queue;
+- FastAPI backend с `health`, `version`, `config-check`, arXiv collector, papers API, scoring API, analyze-script job и job queue;
 - отдельный review dashboard для ручного отбора статей с фильтрами, detail-панелью, действиями `Approve` / `Reject` и live-seed кнопкой `Fetch Fresh Papers`;
-- документацию по фазам `00-10`.
+- документацию по фазам `00-13`.
 
 ## Структура
 
@@ -42,6 +42,13 @@ npm --prefix dashboard run build
 - после успешного collect автоматически создается job `score-papers` с payload `{ "limit": 20, "status": "collected", "provider": "mock" }`;
 - UI показывает этапы `Collecting`, `Scoring`, `Done` или `Failed`;
 - после успеха список статей обновляется без ручного refresh.
+
+В backend доступен analyze-script этап:
+
+- `POST /jobs/analyze-script-papers` берет бумаги со статусом `scored`;
+- mock-pass создает `paper_summaries`, `scripts` и `scene_json`;
+- при `provider="litellm"` сервис пытается улучшить mock-черновик через LiteLLM, но при ошибке сохраняет mock-результат;
+- успешная paper переводится в `scripted`, а ошибка одной paper не откатывает уже обработанный batch.
 
 ## Удалённый деплой
 

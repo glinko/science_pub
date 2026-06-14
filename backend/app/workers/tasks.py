@@ -6,6 +6,7 @@ from uuid import UUID
 from app.config import get_settings
 from app.db import build_session_manager
 from app.providers.registry import ProviderRegistry
+from app.services.analyze_script import AnalyzeScriptService
 from app.services.arxiv import ArxivCollector
 from app.services.jobs import JobRepository
 from app.services.papers import PaperRepository
@@ -64,3 +65,27 @@ async def _run_score_papers_job(job_id: UUID, payload: dict) -> None:
             await jobs.mark_failed(session, job_id, str(exc))
     await session_manager.dispose()
 
+
+def run_analyze_script_job(job_id: str, payload: dict) -> None:
+    asyncio.run(_run_analyze_script_job(UUID(job_id), payload))
+
+
+async def _run_analyze_script_job(job_id: UUID, payload: dict) -> None:
+    settings = get_settings()
+    session_manager = build_session_manager(settings)
+    jobs = JobRepository()
+    papers = PaperRepository()
+    service = AnalyzeScriptService(settings, papers, ProviderRegistry(settings))
+    async with session_manager.factory() as session:
+        await jobs.mark_running(session, job_id)
+        try:
+            processed = await service.process_papers(
+                session,
+                limit=payload.get("limit", 10),
+                status=payload.get("status", "scored"),
+                provider=payload.get("provider", "mock"),
+            )
+            await jobs.mark_succeeded(session, job_id, {"processed": processed})
+        except Exception as exc:
+            await jobs.mark_failed(session, job_id, str(exc))
+    await session_manager.dispose()

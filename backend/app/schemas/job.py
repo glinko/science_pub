@@ -19,6 +19,12 @@ class CollectJobRequest(BaseModel):
     max_results: int = Field(default=100, ge=1, le=500)
 
 
+class AnalyzeScriptJobRequest(BaseModel):
+    limit: int = Field(default=10, ge=1, le=100)
+    status: PaperStatus = PaperStatus.SCORED
+    provider: str = "mock"
+
+
 class JobResponse(BaseModel):
     id: UUID
     job_type: str
@@ -28,4 +34,3 @@ class JobResponse(BaseModel):
     error_text: str | None
     created_at: datetime
     updated_at: datetime
-

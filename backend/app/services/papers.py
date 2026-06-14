@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 from typing import cast
 from uuid import UUID
 
@@ -7,10 +8,13 @@ from sqlalchemy import Select, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.enums import PaperStatus
-from app.models.paper import Paper, PaperScore
+from app.models.paper import Paper, PaperScore, PaperSummary, Script
 from app.schemas.paper import LatestScore, PaperResponse
 
 from .arxiv import CollectedPaper
+
+if TYPE_CHECKING:
+    from app.schemas.analyze_script import AnalyzeScriptDraft
 
 
 class PaperRepository:
@@ -149,6 +153,51 @@ class PaperRepository:
             .limit(limit)
         )
         return list((await session.scalars(statement)).all())
+
+    async def fetch_for_scripting(
+        self,
+        session: AsyncSession,
+        *,
+        limit: int,
+        status: PaperStatus,
+    ) -> list[Paper]:
+        statement = (
+            select(Paper)
+            .where(Paper.status == status)
+            .order_by(Paper.published_at.desc())
+            .limit(limit)
+        )
+        return list((await session.scalars(statement)).all())
+
+    async def save_generated_content(
+        self,
+        session: AsyncSession,
+        *,
+        paper: Paper,
+        draft: "AnalyzeScriptDraft",
+    ) -> None:
+        session.add(
+            PaperSummary(
+                paper_id=paper.id,
+                technical_summary=draft.technical_summary,
+                popular_summary=draft.popular_summary,
+                limitations=draft.limitations,
+                hype_risks=draft.hype_risks,
+                model_used=draft.model_used,
+            )
+        )
+        session.add(
+            Script(
+                paper_id=paper.id,
+                format="short-video",
+                language="ru",
+                script_text=draft.script_text,
+                scene_json={"scenes": [scene.model_dump() for scene in draft.scenes]},
+                model_used=draft.model_used,
+            )
+        )
+        paper.status = PaperStatus.SCRIPTED
+        await session.commit()
 
     async def _latest_scores_map(
         self,

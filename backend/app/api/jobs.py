@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
 from app.dependencies import get_job_dispatcher, get_job_repository
-from app.schemas.job import CollectJobRequest, JobRequest, JobResponse
+from app.schemas.job import AnalyzeScriptJobRequest, CollectJobRequest, JobRequest, JobResponse
 from app.services.jobs import JobRepository
 from app.workers.queue import JobDispatcher
 
@@ -36,10 +36,22 @@ async def enqueue_score_job(
     return jobs.to_response(job)
 
 
+@router.post("/jobs/analyze-script-papers", response_model=JobResponse, status_code=status.HTTP_202_ACCEPTED)
+async def enqueue_analyze_script_job(
+    payload: AnalyzeScriptJobRequest,
+    session: AsyncSession = Depends(get_session),
+    jobs: JobRepository = Depends(get_job_repository),
+    dispatcher: JobDispatcher = Depends(get_job_dispatcher),
+) -> JobResponse:
+    data = payload.model_dump(mode="json")
+    job = await jobs.create(session, job_type="analyze-script-papers", payload=data)
+    await dispatcher.enqueue("analyze-script-papers", job.id, data)
+    return jobs.to_response(job)
+
+
 @router.get("/jobs", response_model=list[JobResponse])
 async def list_jobs(
     session: AsyncSession = Depends(get_session),
     jobs: JobRepository = Depends(get_job_repository),
 ) -> list[JobResponse]:
     return await jobs.list_jobs(session)
-

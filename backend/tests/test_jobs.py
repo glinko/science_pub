@@ -75,3 +75,31 @@ async def test_score_jobs_endpoint_accepts_litellm_provider(
             "payload": {"limit": 2, "status": "collected", "provider": "litellm"},
         }
     ]
+
+
+async def test_analyze_script_jobs_endpoint_returns_tracked_job(
+    app_client: AsyncClient,
+    isolated_job_dispatcher,
+) -> None:
+    response = await app_client.post(
+        "/jobs/analyze-script-papers",
+        json={"limit": 4, "status": "scored", "provider": "litellm"},
+    )
+
+    assert response.status_code == 202
+    payload = response.json()
+    assert UUID(payload["id"])
+    assert payload["job_type"] == "analyze-script-papers"
+    assert payload["status"] == "queued"
+    assert payload["input_json"] == {
+        "limit": 4,
+        "status": "scored",
+        "provider": "litellm",
+    }
+    assert isolated_job_dispatcher == [
+        {
+            "job_type": "analyze-script-papers",
+            "job_id": payload["id"],
+            "payload": {"limit": 4, "status": "scored", "provider": "litellm"},
+        }
+    ]
