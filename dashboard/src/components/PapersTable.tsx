@@ -14,6 +14,10 @@ function formatCategories(paper: Paper) {
   return paper.categories.length > 0 ? paper.categories.join(", ") : "—";
 }
 
+function formatPublishedDate(paper: Paper) {
+  return paper.published_at.slice(0, 10);
+}
+
 export function PapersTable({ papers }: PapersTableProps) {
   return (
     <div className="papers-table">
@@ -23,6 +27,7 @@ export function PapersTable({ papers }: PapersTableProps) {
             <th>Title</th>
             <th>Status</th>
             <th>Source</th>
+            <th>Published</th>
             <th>Categories</th>
             <th>Score</th>
           </tr>
@@ -38,6 +43,7 @@ export function PapersTable({ papers }: PapersTableProps) {
                 <StatusBadge status={paper.status} />
               </td>
               <td>{paper.source}</td>
+              <td>{formatPublishedDate(paper)}</td>
               <td>{formatCategories(paper)}</td>
               <td>{formatScore(paper)}</td>
             </tr>
