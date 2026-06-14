@@ -11,6 +11,10 @@ export type PaperStatus =
   | "published"
   | "failed";
 
+export type JobStatus = "queued" | "running" | "succeeded" | "failed";
+
+export type LiveSeedStage = "idle" | "collecting" | "scoring" | "success" | "failed";
+
 export interface LatestScore {
   final_score: number;
   explanation: string;
@@ -39,4 +43,26 @@ export interface PaperListResponse {
   limit: number;
   offset: number;
   items: Paper[];
+}
+
+export interface JobRecord {
+  id: string;
+  job_type: string;
+  status: JobStatus;
+  input_json: Record<string, unknown>;
+  output_json: Record<string, unknown> | null;
+  error_text: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CollectJobRequest {
+  categories: string[];
+  max_results: number;
+}
+
+export interface ScoreJobRequest {
+  limit: number;
+  status: PaperStatus;
+  provider: string;
 }

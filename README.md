@@ -9,7 +9,7 @@
 - provisioning выделенной VM `sci_docker` в Proxmox;
 - Docker Compose стек с `postgres`, `redis`, `minio`, `qdrant`, `backend`, `worker`, `n8n`, `litellm`, `dashboard`;
 - FastAPI backend с `health`, `version`, `config-check`, arXiv collector, papers API, scoring API и job queue;
-- отдельный review dashboard для ручного отбора статей с фильтрами, detail-панелью и действиями `Approve` / `Reject`;
+- отдельный review dashboard для ручного отбора статей с фильтрами, detail-панелью, действиями `Approve` / `Reject` и live-seed кнопкой `Fetch Fresh Papers`;
 - документацию по фазам `00-10`.
 
 ## Структура
@@ -35,6 +35,13 @@ npm --prefix dashboard run build
 ```
 
 После запуска compose review dashboard доступен на `http://localhost:3000`.
+
+В dashboard доступен live-seed сценарий:
+
+- кнопка `Fetch Fresh Papers` создает job `collect-arxiv` с payload `{ "categories": [], "max_results": 100 }`;
+- после успешного collect автоматически создается job `score-papers` с payload `{ "limit": 20, "status": "collected", "provider": "mock" }`;
+- UI показывает этапы `Collecting`, `Scoring`, `Done` или `Failed`;
+- после успеха список статей обновляется без ручного refresh.
 
 ## Удалённый деплой
 

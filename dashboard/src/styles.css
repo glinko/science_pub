@@ -24,12 +24,52 @@ body {
 }
 
 .dashboard__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   margin-bottom: 24px;
 }
 
 .dashboard__header h1 {
   margin: 0;
   font-size: 2rem;
+}
+
+.live-seed {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.live-seed__button {
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 10px;
+  font: inherit;
+  font-weight: 700;
+  color: #ffffff;
+  background: #1d4ed8;
+  cursor: pointer;
+}
+
+.live-seed__button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.live-seed__status {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #4b5563;
+}
+
+.live-seed__status--failed {
+  color: #b91c1c;
+}
+
+.live-seed__status--success {
+  color: #166534;
 }
 
 .dashboard__layout {

@@ -26,7 +26,28 @@
 - фильтры `status`, `source`, `category`, `min_score`, `search`;
 - список статей с title, status, source, published date, category и score;
 - detail-панель выбранной статьи;
-- действия `Approve -> approved` и `Reject -> rejected`.
+- действия `Approve -> approved` и `Reject -> rejected`;
+- live-seed действие `Fetch Fresh Papers`.
+
+## Live Seed
+
+Кнопка `Fetch Fresh Papers` нужна, чтобы наполнять review dashboard свежими статьями прямо из UI.
+
+Текущая версия работает так:
+
+- создает job `collect-arxiv` с payload `{ "categories": [], "max_results": 100 }`;
+- poll'ит `/api/jobs` до завершения collect;
+- после `succeeded` автоматически создает job `score-papers` с payload `{ "limit": 20, "status": "collected", "provider": "mock" }`;
+- снова poll'ит `/api/jobs` до завершения scoring;
+- после успеха автоматически обновляет список статей с текущими фильтрами;
+- во время выполнения блокирует повторный запуск из того же UI.
+
+Пользователь видит состояния:
+
+- `Collecting...`
+- `Scoring...`
+- `Done`
+- `Failed`
 
 ## Локальная проверка
 
@@ -47,6 +68,14 @@ docker compose up -d --build
 ```text
 http://localhost:3000
 ```
+
+Минимальный smoke для live-seed:
+
+1. Открыть dashboard.
+2. Нажать `Fetch Fresh Papers`.
+3. Убедиться, что статус проходит через `Collecting...` и `Scoring...`.
+4. Убедиться, что после `Done` список статей обновился без ручного reload.
+5. При необходимости проверить backend queue через `GET /jobs`.
 
 ## Ограничения milestone 1
 

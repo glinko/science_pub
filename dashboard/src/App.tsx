@@ -1,12 +1,27 @@
 import { useEffect, useState } from "react";
 
+import { LiveSeedControl } from "./components/LiveSeedControl";
 import { PaperDetail } from "./components/PaperDetail";
 import { FiltersBar } from "./components/FiltersBar";
 import { PapersTable } from "./components/PapersTable";
-import { getPaper, listPapers, updatePaperStatus } from "./lib/api";
+import {
+  enqueueCollectJob,
+  enqueueScoreJob,
+  getPaper,
+  listJobs,
+  listPapers,
+  updatePaperStatus,
+} from "./lib/api";
 import { buildPapersQuery, defaultPaperFilters, isMinScoreValid } from "./lib/filters";
-import type { Paper } from "./lib/types";
+import type { LiveSeedStage, Paper } from "./lib/types";
 import "./styles.css";
+
+const POLL_INTERVAL_MS = 2500;
+
+type LoadPapersOptions = {
+  preserveSelection: boolean;
+  shouldApply?: () => boolean;
+};
 
 export default function App() {
   const [filters, setFilters] = useState(defaultPaperFilters);
@@ -17,39 +32,67 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [mutating, setMutating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [seedBusy, setSeedBusy] = useState(false);
+  const [seedStage, setSeedStage] = useState<LiveSeedStage>("idle");
+  const [seedMessage, setSeedMessage] = useState<string | null>(null);
+
+  async function loadPapers(
+    nextFilters = filters,
+    options: LoadPapersOptions = { preserveSelection: false },
+  ) {
+    const shouldApply = options.shouldApply ?? (() => true);
+
+    if (!isMinScoreValid(nextFilters.min_score)) {
+      if (shouldApply()) {
+        setLoading(false);
+        setError(null);
+      }
+      return;
+    }
+
+    if (shouldApply()) {
+      setLoading(true);
+      setError(null);
+    }
+
+    try {
+      const payload = await listPapers(buildPapersQuery(nextFilters));
+
+      if (!shouldApply()) {
+        return;
+      }
+
+      setPapers(payload.items);
+
+      if (!options.preserveSelection || !selectedPaperId) {
+        return;
+      }
+
+      const stillVisible = payload.items.find((paper) => paper.id === selectedPaperId);
+
+      if (stillVisible) {
+        setSelectedPaper(stillVisible);
+        return;
+      }
+
+      setSelectedPaperId(null);
+      setSelectedPaper(null);
+    } catch {
+      if (shouldApply()) {
+        setError("Не удалось загрузить статьи.");
+        setPapers([]);
+      }
+    } finally {
+      if (shouldApply()) {
+        setLoading(false);
+      }
+    }
+  }
 
   useEffect(() => {
     let isCancelled = false;
 
-    async function loadPapers() {
-      if (!isMinScoreValid(filters.min_score)) {
-        setLoading(false);
-        setError(null);
-        return;
-      }
-
-      setLoading(true);
-      setError(null);
-
-      try {
-        const payload = await listPapers(buildPapersQuery(filters));
-
-        if (!isCancelled) {
-          setPapers(payload.items);
-        }
-      } catch {
-        if (!isCancelled) {
-          setError("Не удалось загрузить статьи.");
-          setPapers([]);
-        }
-      } finally {
-        if (!isCancelled) {
-          setLoading(false);
-        }
-      }
-    }
-
-    void loadPapers();
+    void loadPapers(filters, { preserveSelection: false, shouldApply: () => !isCancelled });
 
     return () => {
       isCancelled = true;
@@ -93,6 +136,53 @@ export default function App() {
     };
   }, [selectedPaperId]);
 
+  async function waitForJob(jobId: string) {
+    for (;;) {
+      const jobs = await listJobs();
+      const job = jobs.find((item) => item.id === jobId);
+
+      if (!job) {
+        throw new Error("job_not_found");
+      }
+
+      if (job.status === "succeeded") {
+        return job;
+      }
+
+      if (job.status === "failed") {
+        throw new Error(job.error_text || `${job.job_type} failed`);
+      }
+
+      await new Promise((resolve) => window.setTimeout(resolve, POLL_INTERVAL_MS));
+    }
+  }
+
+  async function runLiveSeed() {
+    setSeedBusy(true);
+    setSeedStage("collecting");
+    setSeedMessage("Collecting...");
+
+    try {
+      const collectJob = await enqueueCollectJob({ categories: [], max_results: 100 });
+      await waitForJob(collectJob.id);
+
+      setSeedStage("scoring");
+      setSeedMessage("Scoring...");
+
+      const scoreJob = await enqueueScoreJob({ limit: 20, status: "collected", provider: "mock" });
+      await waitForJob(scoreJob.id);
+
+      await loadPapers(filters, { preserveSelection: true });
+      setSeedStage("success");
+      setSeedMessage("Done");
+    } catch (seedError) {
+      setSeedStage("failed");
+      setSeedMessage(seedError instanceof Error ? seedError.message : "Live seed failed");
+    } finally {
+      setSeedBusy(false);
+    }
+  }
+
   async function handleStatusChange(status: "approved" | "rejected") {
     if (!selectedPaperId) {
       return;
@@ -133,6 +223,12 @@ export default function App() {
     <main className="dashboard">
       <header className="dashboard__header">
         <h1>Science Pub Review</h1>
+        <LiveSeedControl
+          busy={seedBusy}
+          stage={seedStage}
+          message={seedMessage}
+          onRun={() => void runLiveSeed()}
+        />
       </header>
       <section className="dashboard__layout">
         <div className="dashboard__table">

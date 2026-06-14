@@ -1,5 +1,5 @@
 import "@testing-library/jest-dom/vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import App from "./App";
@@ -336,6 +336,341 @@ describe("App", () => {
     fireEvent.click(await screen.findByRole("button", { name: /approve/i }));
 
     expect(await screen.findByText(/approved/i)).toBeInTheDocument();
+  });
+
+  it("runs collect, then score, then refreshes papers", async () => {
+    const initialPaper = buildPaper({ id: "paper-1", title: "Older paper" });
+    const freshPaper = buildPaper({ id: "paper-2", title: "Fresh paper", status: "scored" });
+    let papersCalls = 0;
+    let jobsCalls = 0;
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url.includes("/api/papers?")) {
+        papersCalls += 1;
+
+        return new Response(
+          JSON.stringify({
+            total: papersCalls === 1 ? 1 : 2,
+            limit: 25,
+            offset: 0,
+            items: papersCalls === 1 ? [initialPaper] : [freshPaper, initialPaper],
+          }),
+          { status: 200 },
+        );
+      }
+
+      if (url.endsWith("/api/jobs/collect-arxiv")) {
+        return new Response(
+          JSON.stringify({
+            id: "collect-job",
+            job_type: "collect-arxiv",
+            status: "queued",
+            input_json: { categories: [], max_results: 100 },
+            output_json: null,
+            error_text: null,
+            created_at: "2026-06-14T12:00:00Z",
+            updated_at: "2026-06-14T12:00:00Z",
+          }),
+          { status: 202 },
+        );
+      }
+
+      if (url.endsWith("/api/jobs/score-papers")) {
+        return new Response(
+          JSON.stringify({
+            id: "score-job",
+            job_type: "score-papers",
+            status: "queued",
+            input_json: { limit: 20, status: "collected", provider: "mock" },
+            output_json: null,
+            error_text: null,
+            created_at: "2026-06-14T12:01:00Z",
+            updated_at: "2026-06-14T12:01:00Z",
+          }),
+          { status: 202 },
+        );
+      }
+
+      if (url.endsWith("/api/jobs")) {
+        jobsCalls += 1;
+
+        if (jobsCalls === 1) {
+          return new Response(
+            JSON.stringify([
+              {
+                id: "collect-job",
+                job_type: "collect-arxiv",
+                status: "running",
+                input_json: { categories: [], max_results: 100 },
+                output_json: null,
+                error_text: null,
+                created_at: "2026-06-14T12:00:00Z",
+                updated_at: "2026-06-14T12:00:05Z",
+              },
+            ]),
+            { status: 200 },
+          );
+        }
+
+        if (jobsCalls === 2) {
+          return new Response(
+            JSON.stringify([
+              {
+                id: "collect-job",
+                job_type: "collect-arxiv",
+                status: "succeeded",
+                input_json: { categories: [], max_results: 100 },
+                output_json: { fetched: 15, inserted: 8, duplicates: 7 },
+                error_text: null,
+                created_at: "2026-06-14T12:00:00Z",
+                updated_at: "2026-06-14T12:00:10Z",
+              },
+            ]),
+            { status: 200 },
+          );
+        }
+
+        if (jobsCalls === 3) {
+          return new Response(
+            JSON.stringify([
+              {
+                id: "score-job",
+                job_type: "score-papers",
+                status: "running",
+                input_json: { limit: 20, status: "collected", provider: "mock" },
+                output_json: null,
+                error_text: null,
+                created_at: "2026-06-14T12:01:00Z",
+                updated_at: "2026-06-14T12:01:05Z",
+              },
+            ]),
+            { status: 200 },
+          );
+        }
+
+        return new Response(
+          JSON.stringify([
+            {
+              id: "score-job",
+              job_type: "score-papers",
+              status: "succeeded",
+              input_json: { limit: 20, status: "collected", provider: "mock" },
+              output_json: { processed: 8 },
+              error_text: null,
+              created_at: "2026-06-14T12:01:00Z",
+              updated_at: "2026-06-14T12:01:20Z",
+            },
+          ]),
+          { status: 200 },
+        );
+      }
+
+      throw new Error(`Unexpected request: ${url} ${init?.method ?? "GET"}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    const button = await screen.findByRole("button", { name: /fetch fresh papers/i });
+    vi.useFakeTimers();
+    fireEvent.click(button);
+
+    expect(screen.getByText(/collecting/i)).toBeInTheDocument();
+    expect(button).toBeDisabled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_500);
+    });
+    expect(screen.getByText(/scoring/i)).toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_500);
+    });
+    expect(screen.getByText(/done/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^fresh paper$/i })).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith("/api/jobs/collect-arxiv", expect.any(Object));
+    expect(fetchMock).toHaveBeenCalledWith("/api/jobs/score-papers", expect.any(Object));
+
+    vi.useRealTimers();
+  });
+
+  it("shows collect failure and does not start scoring", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes("/api/papers?")) {
+        return new Response(JSON.stringify({ total: 0, limit: 25, offset: 0, items: [] }), {
+          status: 200,
+        });
+      }
+
+      if (url.endsWith("/api/jobs/collect-arxiv")) {
+        return new Response(
+          JSON.stringify({
+            id: "collect-job",
+            job_type: "collect-arxiv",
+            status: "queued",
+            input_json: { categories: [], max_results: 100 },
+            output_json: null,
+            error_text: null,
+            created_at: "2026-06-14T12:00:00Z",
+            updated_at: "2026-06-14T12:00:00Z",
+          }),
+          { status: 202 },
+        );
+      }
+
+      if (url.endsWith("/api/jobs")) {
+        return new Response(
+          JSON.stringify([
+            {
+              id: "collect-job",
+              job_type: "collect-arxiv",
+              status: "failed",
+              input_json: { categories: [], max_results: 100 },
+              output_json: null,
+              error_text: "arXiv timeout",
+              created_at: "2026-06-14T12:00:00Z",
+              updated_at: "2026-06-14T12:00:05Z",
+            },
+          ]),
+          { status: 200 },
+        );
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /fetch fresh papers/i }));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText(/arxiv timeout/i)).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalledWith("/api/jobs/score-papers", expect.anything());
+  });
+
+  it("shows score failure without pretending refresh succeeded", async () => {
+    const selectedPaper = buildPaper({ id: "paper-1", title: "Selected paper" });
+    let papersCalls = 0;
+    let jobsCalls = 0;
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes("/api/papers?")) {
+        papersCalls += 1;
+        return new Response(
+          JSON.stringify({
+            total: 1,
+            limit: 25,
+            offset: 0,
+            items: [selectedPaper],
+          }),
+          { status: 200 },
+        );
+      }
+
+      if (url.endsWith("/api/papers/paper-1")) {
+        return new Response(JSON.stringify(selectedPaper), { status: 200 });
+      }
+
+      if (url.endsWith("/api/jobs/collect-arxiv")) {
+        return new Response(
+          JSON.stringify({
+            id: "collect-job",
+            job_type: "collect-arxiv",
+            status: "queued",
+            input_json: {},
+            output_json: null,
+            error_text: null,
+            created_at: "2026-06-14T12:00:00Z",
+            updated_at: "2026-06-14T12:00:00Z",
+          }),
+          { status: 202 },
+        );
+      }
+
+      if (url.endsWith("/api/jobs/score-papers")) {
+        return new Response(
+          JSON.stringify({
+            id: "score-job",
+            job_type: "score-papers",
+            status: "queued",
+            input_json: {},
+            output_json: null,
+            error_text: null,
+            created_at: "2026-06-14T12:01:00Z",
+            updated_at: "2026-06-14T12:01:00Z",
+          }),
+          { status: 202 },
+        );
+      }
+
+      if (url.endsWith("/api/jobs")) {
+        jobsCalls += 1;
+
+        if (jobsCalls === 1) {
+          return new Response(
+            JSON.stringify([
+              {
+                id: "collect-job",
+                job_type: "collect-arxiv",
+                status: "succeeded",
+                input_json: {},
+                output_json: {},
+                error_text: null,
+                created_at: "2026-06-14T12:00:00Z",
+                updated_at: "2026-06-14T12:00:05Z",
+              },
+            ]),
+            { status: 200 },
+          );
+        }
+
+        return new Response(
+          JSON.stringify([
+            {
+              id: "score-job",
+              job_type: "score-papers",
+              status: "failed",
+              input_json: {},
+              output_json: null,
+              error_text: "mock provider exploded",
+              created_at: "2026-06-14T12:01:00Z",
+              updated_at: "2026-06-14T12:01:05Z",
+            },
+          ]),
+          { status: 200 },
+        );
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /selected paper/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /fetch fresh papers/i }));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText(/mock provider exploded/i)).toBeInTheDocument();
+    expect(papersCalls).toBe(1);
+    expect(screen.getByRole("heading", { name: /^selected paper$/i })).toBeInTheDocument();
   });
 });
 
