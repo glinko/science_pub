@@ -6,6 +6,60 @@ import App from "./App";
 import { StatusBadge } from "./components/StatusBadge";
 import { buildPapersQuery, isMinScoreValid } from "./lib/filters";
 
+function buildPaper(overrides: Partial<{
+  id: string;
+  source: string;
+  source_id: string;
+  title: string;
+  abstract: string;
+  authors: string[];
+  categories: string[];
+  pdf_url: string | null;
+  published_at: string;
+  collected_at: string;
+  status:
+    | "collected"
+    | "scored"
+    | "selected"
+    | "analyzed"
+    | "scripted"
+    | "assets_ready"
+    | "rendered"
+    | "approved"
+    | "rejected"
+    | "published"
+    | "failed";
+  raw_metadata_json: Record<string, unknown>;
+  latest_score: {
+    final_score: number;
+    explanation: string;
+    model_used: string;
+    created_at: string;
+  } | null;
+}> = {}) {
+  return {
+    id: "paper-1",
+    source: "arxiv",
+    source_id: "1234.5678",
+    title: "Quantum Search Advances",
+    abstract: "Example abstract",
+    authors: ["Ada Lovelace"],
+    categories: ["physics"],
+    pdf_url: null,
+    published_at: "2026-05-01T10:00:00Z",
+    collected_at: "2026-05-02T10:00:00Z",
+    status: "scored" as const,
+    raw_metadata_json: {},
+    latest_score: {
+      final_score: 8.2,
+      explanation: "Strong fit",
+      model_used: "gpt-test",
+      created_at: "2026-05-03T10:00:00Z",
+    },
+    ...overrides,
+  };
+}
+
 describe("App", () => {
   it("renders review dashboard shell", async () => {
     const fetchMock = vi.fn(async () =>
@@ -53,8 +107,9 @@ describe("App", () => {
       ),
     );
 
-    expect(String(fetchMock.mock.calls.at(-1)?.[0])).toContain("search=quantum");
-    expect(String(fetchMock.mock.calls.at(-1)?.[0])).toContain("status=collected");
+    const lastQueryCall = fetchMock.mock.calls[fetchMock.mock.calls.length - 1]?.[0];
+    expect(String(lastQueryCall)).toContain("search=quantum");
+    expect(String(lastQueryCall)).toContain("status=collected");
   });
 
   it("renders the first-version filter controls", async () => {
@@ -124,7 +179,7 @@ describe("App", () => {
       ),
     );
 
-    const lastCall = String(fetchMock.mock.calls.at(-1)?.[0]);
+    const lastCall = String(fetchMock.mock.calls[fetchMock.mock.calls.length - 1]?.[0]);
     expect(lastCall).toContain("source=arxiv");
     expect(lastCall).toContain("category=physics");
     expect(lastCall).toContain("min_score=7.5");
@@ -180,28 +235,7 @@ describe("App", () => {
             total: 1,
             limit: 10,
             offset: 0,
-            items: [
-              {
-                id: "paper-1",
-                source: "arxiv",
-                source_id: "1234.5678",
-                title: "Quantum Search Advances",
-                abstract: "Example abstract",
-                authors: ["Ada Lovelace"],
-                categories: ["physics"],
-                pdf_url: null,
-                published_at: "2026-05-01T10:00:00Z",
-                collected_at: "2026-05-02T10:00:00Z",
-                status: "collected",
-                raw_metadata_json: {},
-                latest_score: {
-                  final_score: 8.2,
-                  explanation: "Strong fit",
-                  model_used: "gpt-test",
-                  created_at: "2026-05-03T10:00:00Z",
-                },
-              },
-            ],
+            items: [buildPaper({ status: "collected" })],
           }),
           { status: 200 },
         ),
@@ -212,6 +246,96 @@ describe("App", () => {
 
     expect(await screen.findByText("Quantum Search Advances")).toBeInTheDocument();
     expect(screen.getByText(/2026-05-01/i)).toBeInTheDocument();
+  });
+
+  it("opens selected paper in the detail panel", async () => {
+    const selectedPaper = buildPaper({
+      title: "Selected paper",
+      abstract: "Detail abstract",
+      authors: ["A. Reviewer"],
+      categories: ["cs.AI"],
+      source_id: "2606.55555v1",
+      latest_score: {
+        final_score: 8.4,
+        explanation: "Strong fit",
+        model_used: "mock:heuristic-v1",
+        created_at: "2026-06-14T10:06:00Z",
+      },
+    });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+
+        if (url.includes("/api/papers?")) {
+          return new Response(
+            JSON.stringify({
+              total: 1,
+              limit: 10,
+              offset: 0,
+              items: [selectedPaper],
+            }),
+            { status: 200 },
+          );
+        }
+
+        return new Response(JSON.stringify(selectedPaper), { status: 200 });
+      }),
+    );
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /selected paper/i }));
+
+    expect(await screen.findByText(/detail abstract/i)).toBeInTheDocument();
+    expect(screen.getByText(/mock:heuristic-v1/i)).toBeInTheDocument();
+  });
+
+  it("approves a paper and updates the visible status", async () => {
+    const paper = buildPaper({
+      title: "Selected paper",
+      abstract: "Detail abstract",
+      authors: ["A. Reviewer"],
+      categories: ["cs.AI"],
+      source_id: "2606.55555v1",
+      latest_score: null,
+    });
+    const approvedPaper = buildPaper({
+      ...paper,
+      status: "approved",
+      latest_score: null,
+    });
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url.includes("/api/papers?")) {
+        return new Response(
+          JSON.stringify({
+            total: 1,
+            limit: 10,
+            offset: 0,
+            items: [paper],
+          }),
+          { status: 200 },
+        );
+      }
+
+      if (init?.method === "PATCH") {
+        return new Response(JSON.stringify(approvedPaper), { status: 200 });
+      }
+
+      return new Response(JSON.stringify(paper), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /selected paper/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /approve/i }));
+
+    expect(await screen.findByText(/approved/i)).toBeInTheDocument();
   });
 });
 

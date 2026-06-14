@@ -4,6 +4,8 @@ import { StatusBadge } from "./StatusBadge";
 
 interface PapersTableProps {
   papers: Paper[];
+  selectedPaperId: string | null;
+  onSelect: (paperId: string) => void;
 }
 
 function formatScore(paper: Paper) {
@@ -18,7 +20,7 @@ function formatPublishedDate(paper: Paper) {
   return paper.published_at.slice(0, 10);
 }
 
-export function PapersTable({ papers }: PapersTableProps) {
+export function PapersTable({ papers, selectedPaperId, onSelect }: PapersTableProps) {
   return (
     <div className="papers-table">
       <table>
@@ -34,9 +36,15 @@ export function PapersTable({ papers }: PapersTableProps) {
         </thead>
         <tbody>
           {papers.map((paper) => (
-            <tr key={paper.id}>
+            <tr key={paper.id} className={paper.id === selectedPaperId ? "papers-table__row--selected" : undefined}>
               <td>
-                <div className="papers-table__title">{paper.title}</div>
+                <button
+                  type="button"
+                  className="papers-table__select"
+                  onClick={() => onSelect(paper.id)}
+                >
+                  {paper.title}
+                </button>
                 <div className="papers-table__meta">{paper.authors.join(", ") || "Unknown authors"}</div>
               </td>
               <td>
