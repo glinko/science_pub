@@ -143,6 +143,23 @@ services:
       retries: 10
     networks: [science-pub]
 
+  dashboard:
+    build:
+      context: ./dashboard
+    container_name: science-pub-dashboard
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${DASHBOARD_PORT}:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000 >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    networks: [science-pub]
+
   worker:
     build:
       context: ./backend
