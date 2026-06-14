@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { FiltersBar } from "./components/FiltersBar";
 import { PapersTable } from "./components/PapersTable";
 import { listPapers } from "./lib/api";
-import { buildPapersQuery, defaultPaperFilters } from "./lib/filters";
+import { buildPapersQuery, defaultPaperFilters, isMinScoreValid } from "./lib/filters";
 import type { Paper } from "./lib/types";
 import "./styles.css";
 
@@ -17,6 +17,12 @@ export default function App() {
     let isCancelled = false;
 
     async function loadPapers() {
+      if (!isMinScoreValid(filters.min_score)) {
+        setLoading(false);
+        setError(null);
+        return;
+      }
+
       setLoading(true);
       setError(null);
 

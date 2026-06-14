@@ -3,7 +3,8 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import App from "./App";
-import { buildPapersQuery } from "./lib/filters";
+import { StatusBadge } from "./components/StatusBadge";
+import { buildPapersQuery, isMinScoreValid } from "./lib/filters";
 
 describe("App", () => {
   it("renders review dashboard shell", async () => {
@@ -73,6 +74,26 @@ describe("App", () => {
     expect(screen.getByLabelText(/minimum score/i)).toBeInTheDocument();
   });
 
+  it("renders status filter options for all paper statuses with readable labels", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(JSON.stringify({ total: 0, limit: 10, offset: 0, items: [] }), { status: 200 }),
+      ),
+    );
+
+    render(<App />);
+
+    const statusSelect = await screen.findByLabelText(/status/i);
+    const optionLabels = Array.from(statusSelect.querySelectorAll("option")).map((option) => option.textContent);
+
+    expect(optionLabels).toContain("All");
+    expect(optionLabels).toContain("Collected");
+    expect(optionLabels).toContain("Assets Ready");
+    expect(optionLabels).toContain("Published");
+    expect(optionLabels).toContain("Failed");
+  });
+
   it("sends source, category, and minimum score filters to the papers endpoint", async () => {
     const fetchMock = vi
       .fn()
@@ -107,6 +128,26 @@ describe("App", () => {
     expect(lastCall).toContain("source=arxiv");
     expect(lastCall).toContain("category=physics");
     expect(lastCall).toContain("min_score=7.5");
+  });
+
+  it("does not fetch or show an error for invalid transient minimum score input", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ total: 0, limit: 10, offset: 0, items: [] }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(new Response("boom", { status: 500 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: /science pub review/i });
+    fireEvent.change(screen.getByLabelText(/minimum score/i), { target: { value: "abc" } });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/не удалось загрузить статьи/i)).not.toBeInTheDocument();
   });
 
   it("renders empty state when filters return no papers", async () => {
@@ -174,10 +215,18 @@ describe("App", () => {
   });
 });
 
-describe("buildPapersQuery", () => {
+describe("StatusBadge", () => {
+  it("renders a readable label for non-core statuses", () => {
+    render(<StatusBadge status="assets_ready" />);
+
+    expect(screen.getByText("Assets Ready")).toBeInTheDocument();
+  });
+});
+
+describe("filters helpers", () => {
   it("includes only active filters alongside default params", () => {
     const query = buildPapersQuery({
-      status: "collected",
+      status: "selected",
       source: "arxiv",
       category: "physics",
       min_score: "7.5",
@@ -187,10 +236,17 @@ describe("buildPapersQuery", () => {
     expect(query).toContain("include_scores=true");
     expect(query).toContain("limit=25");
     expect(query).toContain("offset=0");
-    expect(query).toContain("status=collected");
+    expect(query).toContain("status=selected");
     expect(query).toContain("source=arxiv");
     expect(query).toContain("category=physics");
     expect(query).toContain("min_score=7.5");
     expect(query).toContain("search=quantum");
+  });
+
+  it("treats invalid minimum score values as invalid", () => {
+    expect(isMinScoreValid("")).toBe(true);
+    expect(isMinScoreValid("7.5")).toBe(true);
+    expect(isMinScoreValid("abc")).toBe(false);
+    expect(isMinScoreValid("Infinity")).toBe(false);
   });
 });

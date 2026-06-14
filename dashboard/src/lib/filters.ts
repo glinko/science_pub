@@ -14,6 +14,27 @@ export const defaultPaperFilters: PaperFilters = {
   search: "",
 };
 
+export function isMinScoreValid(value: string) {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return true;
+  }
+
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed);
+}
+
+function normalizeMinScore(value: string) {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return "";
+  }
+
+  return isMinScoreValid(trimmed) ? trimmed : null;
+}
+
 export function buildPapersQuery(filters: PaperFilters) {
   const params = new URLSearchParams({
     include_scores: "true",
@@ -24,7 +45,8 @@ export function buildPapersQuery(filters: PaperFilters) {
   if (filters.status) params.set("status", filters.status);
   if (filters.source) params.set("source", filters.source);
   if (filters.category) params.set("category", filters.category);
-  if (filters.min_score) params.set("min_score", filters.min_score);
+  const minScore = normalizeMinScore(filters.min_score);
+  if (minScore) params.set("min_score", minScore);
   if (filters.search) params.set("search", filters.search);
 
   return params.toString();

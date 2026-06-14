@@ -1,16 +1,12 @@
 import type { PaperStatus } from "../lib/types";
-
-const statusLabels: Partial<Record<PaperStatus, string>> = {
-  approved: "Approved",
-  collected: "Collected",
-  rejected: "Rejected",
-  scored: "Scored",
-};
+import { paperStatusConfig } from "../lib/status";
 
 export function StatusBadge({ status }: { status: PaperStatus }) {
+  const config = paperStatusConfig[status];
+
   return (
-    <span className={`status-badge status-badge--${status}`}>
-      {statusLabels[status] ?? status}
+    <span className={`status-badge status-badge--${config.tone}`}>
+      {config.label}
     </span>
   );
 }

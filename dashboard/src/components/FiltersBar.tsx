@@ -1,4 +1,5 @@
 import type { PaperFilters } from "../lib/filters";
+import { paperStatusOptions } from "../lib/status";
 
 interface FiltersBarProps {
   filters: PaperFilters;
@@ -25,10 +26,11 @@ export function FiltersBar({ filters, onChange }: FiltersBarProps) {
           onChange={(event) => onChange({ ...filters, status: event.target.value })}
         >
           <option value="">All</option>
-          <option value="collected">Collected</option>
-          <option value="scored">Scored</option>
-          <option value="approved">Approved</option>
-          <option value="rejected">Rejected</option>
+          {paperStatusOptions.map(([status, config]) => (
+            <option key={status} value={status}>
+              {config.label}
+            </option>
+          ))}
         </select>
       </label>
       <label className="filters__field">
@@ -53,6 +55,8 @@ export function FiltersBar({ filters, onChange }: FiltersBarProps) {
         <span>Minimum score</span>
         <input
           aria-label="Minimum score"
+          type="number"
+          step="0.1"
           inputMode="decimal"
           value={filters.min_score}
           onChange={(event) => onChange({ ...filters, min_score: event.target.value })}
