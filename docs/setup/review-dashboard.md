@@ -6,48 +6,78 @@
 
 Он нужен, чтобы:
 
-- видеть все собранные статьи в одном месте;
+- видеть статьи в одной очереди;
 - фильтровать их по ключевым признакам;
-- открывать выбранную статью в detail-панели;
-- быстро принимать решение `Approve` или `Reject`.
+- открывать выбранную paper в detail-панели;
+- запускать `Analyze Script` по одной статье;
+- принимать editorial-решение через `Approve` или `Reject`.
 
 ## Архитектура
 
-- frontend находится в каталоге `dashboard/`;
-- приложение собирается через `Vite`;
-- production-выдача идет через отдельный `nginx`-контейнер;
-- UI обращается к backend через `/api/*`, который проксируется в `backend:8000`.
+- frontend находится в `dashboard/`;
+- runtime — `React + Vite`;
+- production-выдача идет через отдельный `nginx`-сервис;
+- UI ходит в backend через `/api/*`.
 
-## Первый workflow
+Backend остается единственным источником истины. Dashboard не хранит отдельное бизнес-состояние и работает через:
 
-Текущая версия dashboard поддерживает:
+- `GET /papers`
+- `GET /papers/{id}`
+- `PATCH /papers/{id}/status`
+- `POST /jobs/analyze-script-papers`
+- `GET /jobs`
 
-- layout `Table + Detail`;
-- фильтры `status`, `source`, `category`, `min_score`, `search`;
-- список статей с title, status, source, published date, category и score;
-- detail-панель выбранной статьи;
-- действия `Approve -> approved` и `Reject -> rejected`;
-- live-seed действие `Fetch Fresh Papers`.
+## Detail workflow
+
+Текущий detail-driven flow выглядит так:
+
+1. оператор выбирает статью в таблице;
+2. detail-панель показывает scoring, source metadata и original source block;
+3. если review-ready слоя еще нет, UI показывает `Review Draft` empty state;
+4. оператор запускает `Analyze Script`;
+5. dashboard poll'ит `/api/jobs`;
+6. после `succeeded` detail повторно запрашивается через `GET /papers/{id}`;
+7. в detail появляется:
+   - `RU Title`
+   - `RU Abstract`
+   - `Summary`
+   - marker `Review Draft Ready`
+
+Original source остается видимым как reference-блок.
+
+## Review-ready state
+
+После успешного analyze-script detail-панель читает статью в таком порядке:
+
+1. review-ready русский слой;
+2. scoring и статус;
+3. original source;
+4. editorial actions.
+
+Именно это делает detail не просто paper-view, а рабочей editorial surface.
+
+## Действия
+
+### Analyze Script
+
+- работает по одной выбранной paper;
+- создает job `analyze-script-papers`;
+- во время выполнения показывает inline status `Preparing Russian review draft...`;
+- после завершения автоматически обновляет detail.
+
+### Approve / Reject
+
+- остаются в detail action row;
+- используют `PATCH /papers/{id}/status`;
+- в UI работают как следующий шаг после появления review-ready draft.
 
 ## Live Seed
 
-Кнопка `Fetch Fresh Papers` нужна, чтобы наполнять review dashboard свежими статьями прямо из UI.
+Кнопка `Fetch Fresh Papers` остается отдельным workflow для наполнения очереди:
 
-Текущая версия работает так:
-
-- создает job `collect-arxiv` с payload `{ "categories": [], "max_results": 100 }`;
-- poll'ит `/api/jobs` до завершения collect;
-- после `succeeded` автоматически создает job `score-papers` с payload `{ "limit": 20, "status": "collected", "provider": "mock" }`;
-- снова poll'ит `/api/jobs` до завершения scoring;
-- после успеха автоматически обновляет список статей с текущими фильтрами;
-- во время выполнения блокирует повторный запуск из того же UI.
-
-Пользователь видит состояния:
-
-- `Collecting...`
-- `Scoring...`
-- `Done`
-- `Failed`
+- создает `collect-arxiv`;
+- после успеха создает `score-papers`;
+- обновляет список статей без ручного refresh.
 
 ## Локальная проверка
 
@@ -56,26 +86,14 @@ npm --prefix dashboard test -- --run
 npm --prefix dashboard run build
 ```
 
-Если Docker доступен:
+Если стек поднят локально:
 
-```bash
-docker compose config
-docker compose up -d --build
-```
-
-После старта compose dashboard должен открываться на:
-
-```text
-http://localhost:3000
-```
-
-Минимальный smoke для live-seed:
-
-1. Открыть dashboard.
-2. Нажать `Fetch Fresh Papers`.
-3. Убедиться, что статус проходит через `Collecting...` и `Scoring...`.
-4. Убедиться, что после `Done` список статей обновился без ручного reload.
-5. При необходимости проверить backend queue через `GET /jobs`.
+1. открыть [http://localhost:3000](http://localhost:3000);
+2. выбрать paper в таблице;
+3. нажать `Analyze Script`;
+4. дождаться появления `Review Draft Ready`;
+5. убедиться, что detail показывает `RU Title`, `RU Abstract` и `Summary`;
+6. проверить, что `Approve` и `Reject` продолжают работать.
 
 ## Ограничения milestone 1
 
@@ -84,7 +102,6 @@ http://localhost:3000
 - auth;
 - bulk actions;
 - редакторские комментарии;
-- realtime updates;
-- audit trail;
+- realtime collaboration;
 - kanban/board режим;
-- inline editing summary/script.
+- inline editing generated summary/script.

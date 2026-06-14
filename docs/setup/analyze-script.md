@@ -2,67 +2,94 @@
 
 ## Назначение
 
-`analyze-script` — это backend-only этап, который превращает paper со статусом `scored` в первый контентный артефакт:
+`analyze-script` — это backend-этап, который превращает paper в первый review-ready контентный draft.
 
-- summary-анализ статьи;
-- черновой `ru`-сценарий для короткого ролика;
-- минимальный `scene_json` для следующей media-фазы.
+В текущем milestone он делает сразу несколько вещей:
 
-На этом этапе отдельный frontend не требуется. Запуск идет через job queue.
+- создает нормализованный русский слой для editorial review;
+- сохраняет `RU Title`, `RU Abstract` и короткое `Summary`;
+- генерирует черновой `ru`-сценарий;
+- сохраняет минимальный `scene_json` для следующей media-фазы.
 
 ## API
 
-Новый endpoint:
+Основной entrypoint:
 
 ```text
 POST /jobs/analyze-script-papers
 ```
 
-Payload по умолчанию:
+Поддерживаются два сценария:
+
+### 1. Single-paper review flow
+
+```json
+{"paper_id":"<paper-id>","provider":"mock"}
+```
+
+Поведение по умолчанию:
+
+- `limit = 1`
+- `status = "scored"`
+- `provider = "mock"`
+
+Этот режим нужен для detail-панели dashboard, когда оператор запускает `Analyze Script` по одной выбранной статье.
+
+### 2. Batch flow
 
 ```json
 {"limit":10,"status":"scored","provider":"mock"}
 ```
 
-Поддерживаемые поля:
+Этот режим сохраняется для backend smoke и технических batch-запусков.
 
-- `limit` — сколько бумаг брать за один запуск;
-- `status` — исходный статус выборки, по умолчанию `scored`;
-- `provider` — `mock` или `litellm`.
+## Что сохраняется
 
-## Поведение
+Для успешной paper сервис создает:
 
-Сервис работает в два слоя:
+- запись в `paper_summaries`:
+  - `normalized_title_ru`
+  - `normalized_abstract_ru`
+  - `short_summary_ru`
+  - `technical_summary`
+  - `popular_summary`
+  - `limitations`
+  - `hype_risks`
+- запись в `scripts`;
+- `scene_json` в `scripts.scene_json`;
+- переход `papers.status -> scripted`.
 
-1. deterministic `mock` pass;
+## Поведение провайдеров
+
+Pipeline остается staged:
+
+1. deterministic `mock` draft;
 2. optional `litellm` enrichment поверх уже собранного draft.
 
-Итог для успешной paper:
+Это дает два преимущества:
 
-- новая запись в `paper_summaries`;
-- новая запись в `scripts`;
-- `scene_json` в `scripts.scene_json`;
-- переход `papers.status` в `scripted`.
+- pipeline не зависит целиком от внешнего inference;
+- single-paper editorial flow остается рабочим даже при временных проблемах с LiteLLM.
 
-Если LiteLLM недоступен или вернул плохой JSON:
+Если LiteLLM недоступен или возвращает невалидный JSON:
 
 - mock draft сохраняется;
-- paper все равно может стать `scripted`;
-- весь batch не откатывается.
+- paper все равно может перейти в `scripted`;
+- уже полученный review-ready слой не теряется.
 
-Если ошибка произошла на обязательном mock-этапе для конкретной paper:
+Если ломается обязательный mock-pass для конкретной paper:
 
-- эта paper получает статус `failed`;
-- уже завершенные papers остаются сохраненными;
-- batch продолжает работу по остальным бумагам.
+- paper получает `failed`;
+- уже обработанные papers не откатываются;
+- batch продолжает работу по оставшимся элементам.
 
 ## Локальная проверка
 
-Запустить связанные tests:
+Targeted tests:
 
 ```bash
 cd backend
-uv run pytest tests/test_jobs.py tests/test_analyze_script.py -q
+uv run pytest tests/test_jobs.py tests/test_analyze_script.py tests/test_paper_detail_api.py -q
 ```
 
 Полный backend suite:
@@ -74,42 +101,33 @@ uv run pytest -q
 
 ## Smoke
 
-Если стек уже поднят локально:
+Локальный single-paper smoke:
 
 ```bash
 curl -X POST http://localhost:8000/jobs/analyze-script-papers ^
   -H "Content-Type: application/json" ^
-  -d "{\"limit\":1,\"status\":\"scored\",\"provider\":\"mock\"}"
+  -d "{\"paper_id\":\"<paper-id>\",\"provider\":\"mock\"}"
 ```
 
-Проверить jobs:
+Проверить detail:
 
 ```bash
-curl http://localhost:8000/jobs
+curl http://localhost:8000/papers/<paper-id>
 ```
 
 Ожидаемый результат:
 
-- новый job `analyze-script-papers` появляется в очереди;
-- после завершения job имеет `status=succeeded`;
-- соответствующая paper в БД переходит в `scripted`.
-
-## Smoke на `sci-docker`
-
-```bash
-ssh alex@192.168.88.150 "cd /home/alex/science-pub && docker compose up -d --build backend worker"
-ssh alex@192.168.88.150 "curl -fsS -X POST http://127.0.0.1:8000/jobs/analyze-script-papers -H 'Content-Type: application/json' -d '{\"limit\":1,\"status\":\"scored\",\"provider\":\"mock\"}'"
-ssh alex@192.168.88.150 "curl -fsS http://127.0.0.1:8000/jobs"
-```
+- job создается со `status=queued`;
+- после завершения paper переходит в `scripted`;
+- detail payload содержит `review_draft` с русским review-ready слоем.
 
 ## Ограничения текущей версии
 
-В эту фазу сознательно не входят:
+В фазу сознательно не входят:
 
 - PDF extraction;
 - retrieval через Qdrant;
+- ручное редактирование generated summary/script;
 - несколько вариантов сценария;
 - TTS;
-- image/video generation;
-- auto-trigger analyze/script прямо из `/score/papers`;
-- editorial UI для редактирования generated summary/script.
+- image/video generation.
