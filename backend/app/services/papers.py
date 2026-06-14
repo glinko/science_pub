@@ -163,13 +163,14 @@ class PaperRepository:
         *,
         limit: int,
         status: PaperStatus,
+        paper_id: UUID | None = None,
     ) -> list[Paper]:
-        statement = (
-            select(Paper)
-            .where(Paper.status == status)
-            .order_by(Paper.published_at.desc())
-            .limit(limit)
-        )
+        statement = select(Paper)
+        if paper_id is not None:
+            statement = statement.where(Paper.id == paper_id)
+        else:
+            statement = statement.where(Paper.status == status)
+        statement = statement.order_by(Paper.published_at.desc()).limit(limit)
         return list((await session.scalars(statement)).all())
 
     async def save_generated_content(
@@ -182,6 +183,9 @@ class PaperRepository:
         session.add(
             PaperSummary(
                 paper_id=paper.id,
+                normalized_title_ru=draft.ru_title,
+                normalized_abstract_ru=draft.ru_abstract,
+                short_summary_ru=draft.summary,
                 technical_summary=draft.technical_summary,
                 popular_summary=draft.popular_summary,
                 limitations=draft.limitations,

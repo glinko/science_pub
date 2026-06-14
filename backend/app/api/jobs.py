@@ -43,7 +43,7 @@ async def enqueue_analyze_script_job(
     jobs: JobRepository = Depends(get_job_repository),
     dispatcher: JobDispatcher = Depends(get_job_dispatcher),
 ) -> JobResponse:
-    data = payload.model_dump(mode="json")
+    data = payload.model_dump(mode="json", exclude_none=True)
     job = await jobs.create(session, job_type="analyze-script-papers", payload=data)
     await dispatcher.enqueue("analyze-script-papers", job.id, data)
     return jobs.to_response(job)

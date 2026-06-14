@@ -20,7 +20,8 @@ class CollectJobRequest(BaseModel):
 
 
 class AnalyzeScriptJobRequest(BaseModel):
-    limit: int = Field(default=10, ge=1, le=100)
+    paper_id: UUID | None = None
+    limit: int = Field(default=1, ge=1, le=100)
     status: PaperStatus = PaperStatus.SCORED
     provider: str = "mock"
 

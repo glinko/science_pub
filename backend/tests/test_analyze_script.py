@@ -58,7 +58,10 @@ async def test_analyze_script_service_creates_summary_script_and_marks_paper_scr
     assert refreshed is not None
     assert refreshed.status == PaperStatus.SCRIPTED
     assert summary is not None
-    assert summary.model_used == "mock:script-draft-v1"
+    assert summary.normalized_title_ru
+    assert summary.normalized_abstract_ru
+    assert summary.short_summary_ru
+    assert summary.model_used == "mock:script-draft-v2"
     assert summary.technical_summary
     assert summary.popular_summary
     assert script is not None
@@ -66,7 +69,56 @@ async def test_analyze_script_service_creates_summary_script_and_marks_paper_scr
     assert script.language == "ru"
     assert isinstance(script.scene_json, dict)
     assert len(script.scene_json["scenes"]) >= 3
-    assert script.model_used == "mock:script-draft-v1"
+    assert script.model_used == "mock:script-draft-v2"
+
+
+@pytest.mark.asyncio
+async def test_analyze_script_service_creates_review_ready_ru_fields_for_single_paper(
+    settings: AppSettings,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with session_factory() as session:
+        selected_paper = make_scored_paper(
+            source_id="2606.10001v2",
+            title="Original English title",
+        )
+        untouched_paper = make_scored_paper(
+            source_id="2606.10001v3",
+            title="Another paper",
+        )
+        session.add_all([selected_paper, untouched_paper])
+        await session.commit()
+
+        service = AnalyzeScriptService(settings, PaperRepository(), ProviderRegistry(settings))
+        processed = await service.process_papers(
+            session,
+            limit=1,
+            status=PaperStatus.SCORED,
+            provider="mock",
+            paper_id=selected_paper.id,
+        )
+
+    async with session_factory() as session:
+        selected_summary = await session.scalar(
+            select(PaperSummary).where(PaperSummary.paper_id == selected_paper.id)
+        )
+        untouched_summary = await session.scalar(
+            select(PaperSummary).where(PaperSummary.paper_id == untouched_paper.id)
+        )
+        refreshed_selected = await session.get(Paper, selected_paper.id)
+        refreshed_untouched = await session.get(Paper, untouched_paper.id)
+
+    assert processed == 1
+    assert refreshed_selected is not None
+    assert refreshed_selected.status == PaperStatus.SCRIPTED
+    assert selected_summary is not None
+    assert selected_summary.normalized_title_ru
+    assert selected_summary.normalized_abstract_ru
+    assert selected_summary.short_summary_ru
+    assert selected_summary.model_used == "mock:script-draft-v2"
+    assert refreshed_untouched is not None
+    assert refreshed_untouched.status == PaperStatus.SCORED
+    assert untouched_summary is None
 
 
 @pytest.mark.asyncio
@@ -88,15 +140,18 @@ async def test_analyze_script_service_enriches_mock_draft_with_litellm(
             assert model == settings.litellm_scoring_model
             return """
             {
-              "technical_summary": "Уточненный технический summary.",
-              "popular_summary": "Уточненное человеческое объяснение.",
-              "limitations": "Уточненные ограничения.",
-              "hype_risks": "Уточненные hype risks.",
-              "script_text": "Готовый улучшенный сценарий.",
+              "ru_title": "RU normalized title",
+              "ru_abstract": "RU normalized abstract",
+              "summary": "RU short summary",
+              "technical_summary": "Refined technical summary.",
+              "popular_summary": "Refined popular explanation.",
+              "limitations": "Refined limitations.",
+              "hype_risks": "Refined hype risks.",
+              "script_text": "Improved final script.",
               "scenes": [
-                {"scene_number": 1, "purpose": "hook", "narration": "Сцена 1", "visual_cue": "hook"},
-                {"scene_number": 2, "purpose": "core", "narration": "Сцена 2", "visual_cue": "diagram"},
-                {"scene_number": 3, "purpose": "close", "narration": "Сцена 3", "visual_cue": "takeaway"}
+                {"scene_number": 1, "purpose": "hook", "narration": "Scene 1", "visual_cue": "hook"},
+                {"scene_number": 2, "purpose": "core", "narration": "Scene 2", "visual_cue": "diagram"},
+                {"scene_number": 3, "purpose": "close", "narration": "Scene 3", "visual_cue": "takeaway"}
               ],
               "model_used": "ignored-by-service"
             }
@@ -118,10 +173,12 @@ async def test_analyze_script_service_enriches_mock_draft_with_litellm(
 
     assert processed == 1
     assert summary is not None
-    assert summary.popular_summary == "Уточненное человеческое объяснение."
+    assert summary.normalized_title_ru == "RU normalized title"
+    assert summary.short_summary_ru == "RU short summary"
+    assert summary.popular_summary == "Refined popular explanation."
     assert summary.model_used == "gpu/deep-analysis"
     assert script is not None
-    assert script.script_text == "Готовый улучшенный сценарий."
+    assert script.script_text == "Improved final script."
     assert script.model_used == "gpu/deep-analysis"
 
 
@@ -158,9 +215,9 @@ async def test_analyze_script_service_keeps_mock_result_when_litellm_enrichment_
 
     assert processed == 1
     assert summary is not None
-    assert summary.model_used == "mock:script-draft-v1"
+    assert summary.model_used == "mock:script-draft-v2"
     assert script is not None
-    assert script.model_used == "mock:script-draft-v1"
+    assert script.model_used == "mock:script-draft-v2"
 
 
 @pytest.mark.asyncio

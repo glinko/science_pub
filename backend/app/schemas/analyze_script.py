@@ -11,6 +11,9 @@ class SceneDraft(BaseModel):
 
 
 class AnalyzeScriptDraft(BaseModel):
+    ru_title: str
+    ru_abstract: str
+    summary: str
     technical_summary: str
     popular_summary: str
     limitations: str
