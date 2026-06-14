@@ -22,6 +22,13 @@ export interface LatestScore {
   created_at: string;
 }
 
+export interface ReviewDraft {
+  ru_title: string;
+  ru_abstract: string;
+  summary: string;
+  model_used: string | null;
+}
+
 export interface Paper {
   id: string;
   source: string;
@@ -36,6 +43,7 @@ export interface Paper {
   status: PaperStatus;
   raw_metadata_json: Record<string, unknown>;
   latest_score: LatestScore | null;
+  review_draft?: ReviewDraft | null;
 }
 
 export interface PaperListResponse {
@@ -65,4 +73,11 @@ export interface ScoreJobRequest {
   limit: number;
   status: PaperStatus;
   provider: string;
+}
+
+export interface AnalyzeScriptJobRequest {
+  paper_id: string;
+  limit?: number;
+  status?: PaperStatus;
+  provider?: string;
 }

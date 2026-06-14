@@ -254,16 +254,68 @@ body {
   gap: 12px;
 }
 
+.detail__headline {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.detail__eyebrow {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9a3412;
+}
+
 .detail__header h2 {
   margin: 0;
   font-size: 1.3rem;
 }
 
-.detail__abstract {
-  margin: 0;
-  color: #374151;
+.detail__section {
+  padding: 18px;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  background: #f9fafb;
 }
 
+.detail__section--draft {
+  background: linear-gradient(135deg, #fff7ed 0%, #ffffff 100%);
+  border-color: #fdba74;
+}
+
+.detail__section--empty {
+  background: #fff7ed;
+  border-style: dashed;
+}
+
+.detail__section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.detail__section-header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.detail__draft-state {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #9a3412;
+  background: #ffedd5;
+}
+
+.detail__draft-grid,
 .detail__meta {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -271,12 +323,18 @@ body {
   margin: 0;
 }
 
+.detail__draft-block,
 .detail__meta div {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
+.detail__draft-block--full {
+  grid-column: 1 / -1;
+}
+
+.detail__draft-grid dt,
 .detail__meta dt {
   font-size: 0.8rem;
   font-weight: 700;
@@ -285,13 +343,34 @@ body {
   color: #6b7280;
 }
 
+.detail__draft-grid dd,
 .detail__meta dd {
   margin: 0;
   color: #111827;
 }
 
+.detail__hint,
+.detail__explanation,
+.detail__source p {
+  margin: 0;
+  color: #374151;
+}
+
+.detail__source {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.detail__source h4 {
+  margin: 0;
+  font-size: 1rem;
+}
+
 .detail__actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
 }
 
@@ -313,6 +392,16 @@ body {
 
 .detail__reject {
   background: #b91c1c;
+}
+
+.detail__message {
+  margin: 0;
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
+.detail__message--error {
+  color: #b91c1c;
 }
 
 @media (max-width: 768px) {

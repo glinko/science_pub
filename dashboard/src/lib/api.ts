@@ -1,4 +1,5 @@
 import type {
+  AnalyzeScriptJobRequest,
   CollectJobRequest,
   JobRecord,
   Paper,
@@ -70,6 +71,27 @@ export async function enqueueScoreJob(payload: ScoreJobRequest): Promise<JobReco
 
   if (!response.ok) {
     throw new Error("score_job_failed");
+  }
+
+  return response.json() as Promise<JobRecord>;
+}
+
+export async function enqueueAnalyzeScriptJob(payload: AnalyzeScriptJobRequest): Promise<JobRecord> {
+  const response = await fetch("/api/jobs/analyze-script-papers", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      paper_id: payload.paper_id,
+      limit: payload.limit ?? 1,
+      status: payload.status ?? "scored",
+      provider: payload.provider ?? "mock",
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error("analyze_script_job_failed");
   }
 
   return response.json() as Promise<JobRecord>;

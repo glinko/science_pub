@@ -36,6 +36,14 @@ function buildPaper(overrides: Partial<{
     model_used: string;
     created_at: string;
   } | null;
+  review_draft:
+    | {
+        ru_title: string;
+        ru_abstract: string;
+        summary: string;
+        model_used: string | null;
+      }
+    | null;
 }> = {}) {
   return {
     id: "paper-1",
@@ -56,6 +64,7 @@ function buildPaper(overrides: Partial<{
       model_used: "gpt-test",
       created_at: "2026-05-03T10:00:00Z",
     },
+    review_draft: null,
     ...overrides,
   };
 }
@@ -300,6 +309,12 @@ describe("App", () => {
       categories: ["cs.AI"],
       source_id: "2606.55555v1",
       latest_score: null,
+      review_draft: {
+        ru_title: "Нормализованный заголовок",
+        ru_abstract: "Нормализованный абстракт",
+        summary: "Короткое summary для редактора.",
+        model_used: "mock:script-draft-v2",
+      },
     });
     const approvedPaper = buildPaper({
       ...paper,
@@ -336,6 +351,135 @@ describe("App", () => {
     fireEvent.click(await screen.findByRole("button", { name: /approve/i }));
 
     expect(await screen.findByText(/approved/i)).toBeInTheDocument();
+  });
+
+  it("runs analyze script for selected paper and shows review-ready russian draft", async () => {
+    const rawPaper = buildPaper({
+      id: "paper-1",
+      title: "Original English title",
+      abstract: "Original abstract",
+      status: "scored",
+      review_draft: null,
+    });
+    const readyPaper = buildPaper({
+      id: "paper-1",
+      title: "Original English title",
+      abstract: "Original abstract",
+      status: "scripted",
+      review_draft: {
+        ru_title: "Нормализованный заголовок",
+        ru_abstract: "Нормализованный абстракт",
+        summary: "Короткое summary для редактора.",
+        model_used: "mock:script-draft-v2",
+      },
+    });
+
+    let detailCalls = 0;
+    let jobsCalls = 0;
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url.includes("/api/papers?")) {
+        return new Response(
+          JSON.stringify({
+            total: 1,
+            limit: 25,
+            offset: 0,
+            items: [rawPaper],
+          }),
+          { status: 200 },
+        );
+      }
+
+      if (url.endsWith("/api/papers/paper-1")) {
+        detailCalls += 1;
+        return new Response(JSON.stringify(detailCalls >= 2 ? readyPaper : rawPaper), { status: 200 });
+      }
+
+      if (url.endsWith("/api/jobs/analyze-script-papers")) {
+        expect(init?.method).toBe("POST");
+        expect(init?.body).toBe(
+          JSON.stringify({
+            paper_id: "paper-1",
+            limit: 1,
+            status: "scored",
+            provider: "mock",
+          }),
+        );
+        return new Response(
+          JSON.stringify({
+            id: "analyze-job",
+            job_type: "analyze-script-papers",
+            status: "queued",
+            input_json: {
+              paper_id: "paper-1",
+              limit: 1,
+              status: "scored",
+              provider: "mock",
+            },
+            output_json: null,
+            error_text: null,
+            created_at: "2026-06-14T17:00:00Z",
+            updated_at: "2026-06-14T17:00:00Z",
+          }),
+          { status: 202 },
+        );
+      }
+
+      if (url.endsWith("/api/jobs")) {
+        jobsCalls += 1;
+        return new Response(
+          JSON.stringify([
+            {
+              id: "analyze-job",
+              job_type: "analyze-script-papers",
+              status: jobsCalls === 1 ? "running" : "succeeded",
+              input_json: {
+                paper_id: "paper-1",
+                limit: 1,
+                status: "scored",
+                provider: "mock",
+              },
+              output_json: jobsCalls === 1 ? null : { processed: 1, paper_id: "paper-1" },
+              error_text: null,
+              created_at: "2026-06-14T17:00:00Z",
+              updated_at: "2026-06-14T17:00:05Z",
+            },
+          ]),
+          { status: 200 },
+        );
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /original english title/i }));
+    expect(await screen.findByRole("button", { name: /analyze script/i })).toBeInTheDocument();
+
+    vi.useFakeTimers();
+    try {
+      fireEvent.click(screen.getByRole("button", { name: /analyze script/i }));
+
+      expect(screen.getByText(/preparing russian review draft/i)).toBeInTheDocument();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_500);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(screen.getByText(/review draft ready/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/нормализованный заголовок/i).length).toBeGreaterThan(0);
+      expect(screen.getByText(/короткое summary для редактора/i)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /approve/i })).toBeEnabled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("runs collect, then score, then refreshes papers", async () => {
@@ -670,7 +814,7 @@ describe("App", () => {
 
     expect(screen.getByText(/mock provider exploded/i)).toBeInTheDocument();
     expect(papersCalls).toBe(1);
-    expect(screen.getByRole("heading", { name: /^selected paper$/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^selected paper$/i, level: 2 })).toBeInTheDocument();
   });
 });
 

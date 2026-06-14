@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 
+import { FiltersBar } from "./components/FiltersBar";
 import { LiveSeedControl } from "./components/LiveSeedControl";
 import { PaperDetail } from "./components/PaperDetail";
-import { FiltersBar } from "./components/FiltersBar";
 import { PapersTable } from "./components/PapersTable";
 import {
+  enqueueAnalyzeScriptJob,
   enqueueCollectJob,
   enqueueScoreJob,
   getPaper,
@@ -35,6 +36,8 @@ export default function App() {
   const [seedBusy, setSeedBusy] = useState(false);
   const [seedStage, setSeedStage] = useState<LiveSeedStage>("idle");
   const [seedMessage, setSeedMessage] = useState<string | null>(null);
+  const [analyzeBusy, setAnalyzeBusy] = useState(false);
+  const [analyzeMessage, setAnalyzeMessage] = useState<string | null>(null);
 
   async function loadPapers(
     nextFilters = filters,
@@ -71,15 +74,15 @@ export default function App() {
       const stillVisible = payload.items.find((paper) => paper.id === selectedPaperId);
 
       if (stillVisible) {
-        setSelectedPaper(stillVisible);
         return;
       }
 
       setSelectedPaperId(null);
       setSelectedPaper(null);
+      setAnalyzeMessage(null);
     } catch {
       if (shouldApply()) {
-        setError("Не удалось загрузить статьи.");
+        setError("\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c \u0441\u0442\u0430\u0442\u044c\u0438.");
         setPapers([]);
       }
     } finally {
@@ -103,6 +106,7 @@ export default function App() {
     if (!selectedPaperId) {
       setSelectedPaper(null);
       setDetailLoading(false);
+      setAnalyzeMessage(null);
       return;
     }
 
@@ -111,6 +115,7 @@ export default function App() {
 
     async function loadPaperDetail() {
       setDetailLoading(true);
+      setAnalyzeMessage(null);
 
       try {
         const paper = await getPaper(currentPaperId);
@@ -183,6 +188,35 @@ export default function App() {
     }
   }
 
+  async function runAnalyzeScript() {
+    if (!selectedPaperId) {
+      return;
+    }
+
+    setAnalyzeBusy(true);
+    setAnalyzeMessage("Preparing Russian review draft...");
+
+    try {
+      const job = await enqueueAnalyzeScriptJob({ paper_id: selectedPaperId });
+      await waitForJob(job.id);
+      await loadPapers(filters, { preserveSelection: true });
+      const refreshedPaper = await getPaper(selectedPaperId);
+      setSelectedPaper(refreshedPaper);
+      setPapers((currentPapers) =>
+        currentPapers.map((paper) =>
+          paper.id === refreshedPaper.id ? { ...paper, status: refreshedPaper.status } : paper,
+        ),
+      );
+      setAnalyzeMessage(null);
+    } catch (analyzeError) {
+      setAnalyzeMessage(
+        analyzeError instanceof Error ? analyzeError.message : "Analyze script failed",
+      );
+    } finally {
+      setAnalyzeBusy(false);
+    }
+  }
+
   async function handleStatusChange(status: "approved" | "rejected") {
     if (!selectedPaperId) {
       return;
@@ -192,9 +226,17 @@ export default function App() {
 
     try {
       const updatedPaper = await updatePaperStatus(selectedPaperId, status);
-      setSelectedPaper(updatedPaper);
       setPapers((currentPapers) =>
         currentPapers.map((paper) => (paper.id === updatedPaper.id ? updatedPaper : paper)),
+      );
+      setSelectedPaper((currentPaper) =>
+        currentPaper && currentPaper.id === updatedPaper.id
+          ? {
+              ...currentPaper,
+              ...updatedPaper,
+              review_draft: currentPaper.review_draft ?? null,
+            }
+          : updatedPaper,
       );
     } finally {
       setMutating(false);
@@ -204,11 +246,19 @@ export default function App() {
   let tableContent;
 
   if (loading) {
-    tableContent = <div className="state">Загрузка...</div>;
+    tableContent = <div className="state">{"\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430..."}</div>;
   } else if (error) {
-    tableContent = <div className="state state--error">Не удалось загрузить статьи.</div>;
+    tableContent = (
+      <div className="state state--error">
+        {"\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c \u0441\u0442\u0430\u0442\u044c\u0438."}
+      </div>
+    );
   } else if (papers.length === 0) {
-    tableContent = <div className="state state--empty">Ничего не найдено. Измените фильтры.</div>;
+    tableContent = (
+      <div className="state state--empty">
+        {"\u041d\u0438\u0447\u0435\u0433\u043e \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u043e. \u0418\u0437\u043c\u0435\u043d\u0438\u0442\u0435 \u0444\u0438\u043b\u044c\u0442\u0440\u044b."}
+      </div>
+    );
   } else {
     tableContent = (
       <PapersTable
@@ -239,6 +289,9 @@ export default function App() {
           <PaperDetail
             busy={mutating}
             loading={detailLoading}
+            analyzeBusy={analyzeBusy}
+            analyzeMessage={analyzeMessage}
+            onAnalyze={() => void runAnalyzeScript()}
             onApprove={() => void handleStatusChange("approved")}
             onReject={() => void handleStatusChange("rejected")}
             paper={selectedPaper}
