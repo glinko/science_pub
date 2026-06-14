@@ -13,9 +13,12 @@ def test_provider_registry_returns_expected_llm_provider() -> None:
         minio_secret_key="secret",
         qdrant_url="http://localhost:6333",
         litellm_url="http://localhost:4000",
+        litellm_api_key="science-pub-local-only",
     )
     registry = ProviderRegistry(settings=settings)
+    litellm_provider = registry.get_llm_provider("litellm")
 
     assert isinstance(registry.get_llm_provider("mock"), MockLLMProvider)
-    assert isinstance(registry.get_llm_provider("litellm"), LiteLLMProvider)
-
+    assert isinstance(litellm_provider, LiteLLMProvider)
+    assert litellm_provider.timeout == settings.litellm_timeout_seconds
+    assert litellm_provider.api_key == "science-pub-local-only"
