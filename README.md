@@ -7,13 +7,15 @@
 Текущий milestone покрывает:
 
 - provisioning выделенной VM `sci_docker` в Proxmox;
-- Docker Compose стек с `postgres`, `redis`, `minio`, `qdrant`, `backend`, `worker`, `n8n`, `litellm`;
+- Docker Compose стек с `postgres`, `redis`, `minio`, `qdrant`, `backend`, `worker`, `n8n`, `litellm`, `dashboard`;
 - FastAPI backend с `health`, `version`, `config-check`, arXiv collector, papers API, scoring API и job queue;
+- отдельный review dashboard для ручного отбора статей с фильтрами, detail-панелью и действиями `Approve` / `Reject`;
 - документацию по фазам `00-10`.
 
 ## Структура
 
 - `backend/` — FastAPI, SQLAlchemy, Alembic, worker.
+- `dashboard/` — frontend review dashboard на `React + Vite`.
 - `infra/` — provisioning VM, bootstrap хоста, Litellm config.
 - `scripts/` — init и smoke-test команды.
 - `docs/` — решения, setup notes и архитектура.
@@ -27,6 +29,13 @@ uv sync --group dev
 uv run pytest -q
 ```
 
+```bash
+npm --prefix dashboard test -- --run
+npm --prefix dashboard run build
+```
+
+После запуска compose review dashboard доступен на `http://localhost:3000`.
+
 ## Удалённый деплой
 
 1. Скопировать `.env.example` в `.env` и заполнить секреты.
@@ -39,4 +48,3 @@ docker compose up -d --build
 python scripts/init_db.py
 python scripts/test_stack.py
 ```
-

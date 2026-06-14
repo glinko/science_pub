@@ -39,10 +39,18 @@ python scripts/test_stack.py
 ## Порты
 
 - `8000` — backend
+- `3000` — review dashboard
 - `5678` — n8n
 - `9001` — MinIO console
 - `6333` — Qdrant
 - `4000` — LiteLLM
+
+## Review Dashboard
+
+- `dashboard` собирается отдельным frontend-сервисом из каталога `dashboard/`.
+- Контейнер отдает статический bundle через `nginx`.
+- Запросы UI на `/api/*` проксируются в `backend:8000`, поэтому отдельная CORS-настройка для milestone не требуется.
+- Порт задается через `DASHBOARD_PORT`, значение по умолчанию в `.env.example` — `3000`.
 
 ## Проверка от 2026-06-13
 
