@@ -1,28 +1,61 @@
 import { useEffect, useState } from "react";
 
+import { FiltersBar } from "./components/FiltersBar";
+import { PapersTable } from "./components/PapersTable";
 import { listPapers } from "./lib/api";
+import { buildPapersQuery, defaultPaperFilters } from "./lib/filters";
 import type { Paper } from "./lib/types";
 import "./styles.css";
 
 export default function App() {
+  const [filters, setFilters] = useState(defaultPaperFilters);
   const [papers, setPapers] = useState<Paper[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let isCancelled = false;
+
     async function loadPapers() {
+      setLoading(true);
+      setError(null);
+
       try {
-        const payload = await listPapers({ include_scores: true });
-        setPapers(payload.items);
+        const payload = await listPapers(buildPapersQuery(filters));
+
+        if (!isCancelled) {
+          setPapers(payload.items);
+        }
       } catch {
-        setError("Не удалось загрузить статьи.");
+        if (!isCancelled) {
+          setError("Не удалось загрузить статьи.");
+          setPapers([]);
+        }
       } finally {
-        setLoading(false);
+        if (!isCancelled) {
+          setLoading(false);
+        }
       }
     }
 
     void loadPapers();
-  }, []);
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [filters]);
+
+  let tableContent;
+
+  if (loading) {
+    tableContent = <div className="state">Загрузка...</div>;
+  } else if (error) {
+    tableContent = <div className="state state--error">Не удалось загрузить статьи.</div>;
+  } else if (papers.length === 0) {
+    tableContent = <div className="state state--empty">Ничего не найдено. Измените фильтры.</div>;
+  } else {
+    tableContent = <PapersTable papers={papers} />;
+  }
 
   return (
     <main className="dashboard">
@@ -31,7 +64,8 @@ export default function App() {
       </header>
       <section className="dashboard__layout">
         <div className="dashboard__table">
-          {loading ? "Загрузка..." : error ?? `${papers.length} статей`}
+          <FiltersBar filters={filters} onChange={setFilters} />
+          {tableContent}
         </div>
         <aside className="dashboard__detail">Выберите статью для детального просмотра.</aside>
       </section>
