@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_session
 from app.dependencies import get_paper_repository
 from app.enums import PaperStatus
-from app.schemas.paper import PaperListResponse, PaperResponse, PaperStatusPatch
+from app.schemas.paper import PaperDetailResponse, PaperListResponse, PaperResponse, PaperStatusPatch
 from app.services.papers import PaperRepository
 
 router = APIRouter()
@@ -50,12 +50,12 @@ async def list_papers(
     return PaperListResponse(total=total, limit=limit, offset=offset, items=items)
 
 
-@router.get("/papers/{paper_id}", response_model=PaperResponse)
+@router.get("/papers/{paper_id}", response_model=PaperDetailResponse)
 async def get_paper(
     paper_id: UUID,
     session: AsyncSession = Depends(get_session),
     paper_repository: PaperRepository = Depends(get_paper_repository),
-) -> PaperResponse:
+) -> PaperDetailResponse:
     paper = await paper_repository.get_paper(session, paper_id)
     if paper is None:
         raise HTTPException(status_code=404, detail="Paper not found")

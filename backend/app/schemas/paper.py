@@ -31,6 +31,9 @@ class PaperResponse(BaseModel):
     status: PaperStatus
     raw_metadata_json: dict
     latest_score: LatestScore | None = None
+
+
+class PaperDetailResponse(PaperResponse):
     review_draft: ReviewDraftResponse | None = None
 
 

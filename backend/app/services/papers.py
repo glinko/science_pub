@@ -10,7 +10,7 @@ from sqlalchemy.orm import selectinload
 
 from app.enums import PaperStatus
 from app.models.paper import Paper, PaperScore, PaperSummary, Script
-from app.schemas.paper import LatestScore, PaperResponse
+from app.schemas.paper import LatestScore, PaperDetailResponse, PaperResponse
 from app.schemas.review_ready import ReviewDraftResponse
 
 from .arxiv import CollectedPaper
@@ -71,7 +71,7 @@ class PaperRepository:
         sort_by: str,
         sort_order: str,
     ) -> tuple[int, list[PaperResponse]]:
-        statement: Select[tuple[Paper]] = select(Paper).options(selectinload(Paper.summaries))
+        statement: Select[tuple[Paper]] = select(Paper)
         count_statement = select(func.count(Paper.id))
         conditions = []
         if source:
@@ -118,7 +118,7 @@ class PaperRepository:
         paper_id: UUID,
         *,
         include_score: bool = True,
-    ) -> PaperResponse | None:
+    ) -> PaperDetailResponse | None:
         statement = select(Paper).options(selectinload(Paper.summaries)).where(Paper.id == paper_id)
         paper = await session.scalar(statement)
         if paper is None:
@@ -126,7 +126,7 @@ class PaperRepository:
         score = None
         if include_score:
             score = (await self._latest_scores_map(session, [paper.id])).get(paper.id)
-        return self._to_response(paper, score)
+        return self._to_detail_response(paper, score)
 
     async def update_status(
         self,
@@ -227,22 +227,34 @@ class PaperRepository:
         return latest
 
     def _to_response(self, paper: Paper, latest_score: LatestScore | None) -> PaperResponse:
-        return PaperResponse(
-            id=cast(UUID, paper.id),
-            source=paper.source,
-            source_id=paper.source_id,
-            title=paper.title,
-            abstract=paper.abstract,
-            authors=list(paper.authors or []),
-            categories=list(paper.categories or []),
-            pdf_url=paper.pdf_url,
-            published_at=paper.published_at,
-            collected_at=paper.collected_at,
-            status=paper.status,
-            raw_metadata_json=dict(paper.raw_metadata_json or {}),
-            latest_score=latest_score,
+        return PaperResponse(**self._response_payload(paper, latest_score))
+
+    def _to_detail_response(
+        self,
+        paper: Paper,
+        latest_score: LatestScore | None,
+    ) -> PaperDetailResponse:
+        return PaperDetailResponse(
+            **self._response_payload(paper, latest_score),
             review_draft=self._latest_review_draft(paper),
         )
+
+    def _response_payload(self, paper: Paper, latest_score: LatestScore | None) -> dict[str, object]:
+        return {
+            "id": cast(UUID, paper.id),
+            "source": paper.source,
+            "source_id": paper.source_id,
+            "title": paper.title,
+            "abstract": paper.abstract,
+            "authors": list(paper.authors or []),
+            "categories": list(paper.categories or []),
+            "pdf_url": paper.pdf_url,
+            "published_at": paper.published_at,
+            "collected_at": paper.collected_at,
+            "status": paper.status,
+            "raw_metadata_json": dict(paper.raw_metadata_json or {}),
+            "latest_score": latest_score,
+        }
 
     def _latest_review_draft(self, paper: Paper) -> ReviewDraftResponse | None:
         summaries = sorted(paper.summaries, key=lambda item: item.created_at, reverse=True)
