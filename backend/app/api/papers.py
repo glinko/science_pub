@@ -28,6 +28,7 @@ async def list_papers(
     status: PaperStatus | None = None,
     min_score: float | None = None,
     include_scores: bool = False,
+    search: str | None = None,
     sort_by: str = "published_at",
     sort_order: str = "desc",
 ) -> PaperListResponse:
@@ -42,6 +43,7 @@ async def list_papers(
         status=status,
         min_score=min_score,
         include_scores=include_scores,
+        search=search,
         sort_by=sort_by,
         sort_order=sort_order,
     )
@@ -74,4 +76,3 @@ async def patch_paper_status(
     if refreshed is None:
         raise HTTPException(status_code=404, detail="Paper not found")
     return refreshed
-

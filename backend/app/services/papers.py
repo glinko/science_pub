@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import cast
 from uuid import UUID
 
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.enums import PaperStatus
@@ -61,6 +61,7 @@ class PaperRepository:
         status: PaperStatus | None,
         min_score: float | None,
         include_scores: bool,
+        search: str | None,
         sort_by: str,
         sort_order: str,
     ) -> tuple[int, list[PaperResponse]]:
@@ -80,6 +81,14 @@ class PaperRepository:
         if min_score is not None:
             paper_ids = select(PaperScore.paper_id).where(PaperScore.final_score >= min_score)
             conditions.append(Paper.id.in_(paper_ids))
+        if search and search.strip():
+            needle = f"%{search.strip().lower()}%"
+            conditions.append(
+                or_(
+                    func.lower(Paper.title).like(needle),
+                    func.lower(Paper.source_id).like(needle),
+                )
+            )
         for condition in conditions:
             statement = statement.where(condition)
             count_statement = count_statement.where(condition)
@@ -181,4 +190,3 @@ class PaperRepository:
             raw_metadata_json=dict(paper.raw_metadata_json or {}),
             latest_score=latest_score,
         )
-
