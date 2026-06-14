@@ -1,8 +1,24 @@
-import type { PaperListResponse } from "./types";
+import type { PaperListResponse, PaperStatus } from "./types";
 
-export async function listPapers(
-  params: Record<string, string | number | boolean | undefined>,
-): Promise<PaperListResponse> {
+export type ListPapersSortBy = "published_at" | "collected_at" | "title";
+export type ListPapersSortOrder = "asc" | "desc";
+
+export interface ListPapersParams {
+  limit?: number;
+  offset?: number;
+  source?: string;
+  category?: string;
+  published_from?: string;
+  published_to?: string;
+  status?: PaperStatus;
+  min_score?: number;
+  include_scores?: boolean;
+  search?: string;
+  sort_by?: ListPapersSortBy;
+  sort_order?: ListPapersSortOrder;
+}
+
+export async function listPapers(params: ListPapersParams): Promise<PaperListResponse> {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined && value !== "") {
