@@ -66,6 +66,9 @@ class PaperSummary(Base, UUIDPrimaryKeyMixin):
     __tablename__ = "paper_summaries"
 
     paper_id: Mapped[UUID] = mapped_column(ForeignKey("papers.id", ondelete="CASCADE"))
+    normalized_title_ru: Mapped[str | None] = mapped_column(Text, nullable=True)
+    normalized_abstract_ru: Mapped[str | None] = mapped_column(Text, nullable=True)
+    short_summary_ru: Mapped[str | None] = mapped_column(Text, nullable=True)
     technical_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     popular_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     limitations: Mapped[str | None] = mapped_column(Text, nullable=True)

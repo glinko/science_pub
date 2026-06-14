@@ -6,6 +6,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from app.enums import PaperStatus
+from app.schemas.review_ready import ReviewDraftResponse
 from .common import PaginatedResponse
 
 
@@ -30,6 +31,7 @@ class PaperResponse(BaseModel):
     status: PaperStatus
     raw_metadata_json: dict
     latest_score: LatestScore | None = None
+    review_draft: ReviewDraftResponse | None = None
 
 
 class PaperListResponse(PaginatedResponse):
@@ -49,4 +51,3 @@ class CollectResponse(BaseModel):
     fetched: int
     inserted: int
     duplicates: int
-

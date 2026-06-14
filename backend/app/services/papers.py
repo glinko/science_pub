@@ -6,10 +6,12 @@ from uuid import UUID
 
 from sqlalchemy import Select, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.enums import PaperStatus
 from app.models.paper import Paper, PaperScore, PaperSummary, Script
 from app.schemas.paper import LatestScore, PaperResponse
+from app.schemas.review_ready import ReviewDraftResponse
 
 from .arxiv import CollectedPaper
 
@@ -69,7 +71,7 @@ class PaperRepository:
         sort_by: str,
         sort_order: str,
     ) -> tuple[int, list[PaperResponse]]:
-        statement: Select[tuple[Paper]] = select(Paper)
+        statement: Select[tuple[Paper]] = select(Paper).options(selectinload(Paper.summaries))
         count_statement = select(func.count(Paper.id))
         conditions = []
         if source:
@@ -117,7 +119,8 @@ class PaperRepository:
         *,
         include_score: bool = True,
     ) -> PaperResponse | None:
-        paper = await session.get(Paper, paper_id)
+        statement = select(Paper).options(selectinload(Paper.summaries)).where(Paper.id == paper_id)
+        paper = await session.scalar(statement)
         if paper is None:
             return None
         score = None
@@ -238,4 +241,24 @@ class PaperRepository:
             status=paper.status,
             raw_metadata_json=dict(paper.raw_metadata_json or {}),
             latest_score=latest_score,
+            review_draft=self._latest_review_draft(paper),
+        )
+
+    def _latest_review_draft(self, paper: Paper) -> ReviewDraftResponse | None:
+        summaries = sorted(paper.summaries, key=lambda item: item.created_at, reverse=True)
+        summary = next(
+            (
+                item
+                for item in summaries
+                if item.normalized_title_ru and item.normalized_abstract_ru and item.short_summary_ru
+            ),
+            None,
+        )
+        if summary is None:
+            return None
+        return ReviewDraftResponse(
+            ru_title=summary.normalized_title_ru,
+            ru_abstract=summary.normalized_abstract_ru,
+            summary=summary.short_summary_ru,
+            model_used=summary.model_used,
         )
